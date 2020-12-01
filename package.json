@@ -1,0 +1,40 @@
+{
+  "name": "typed-router.ts",
+  "version": "0.0.0-dev",
+  "description": "Type-safe routing in typescript",
+  "keywords": [
+    "Typescript",
+    "routing",
+    "typed"
+  ],
+  "type": "module",
+  "main": "./src/lib.cjs",
+  "module": "./src/lib.js",
+  "types": "./src/lib.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/lib.js",
+      "require": "./src/lib.cjs"
+    }
+  },
+  "scripts": {
+    "test:node": "mocha test/test-*.spec.cjs",
+    "test:browser": "playwright-test test/test-*.cjs",
+    "test:es": "mocha test/test-*.spec.js",
+    "test:cjs": "npm run test:node && npm run test:browser",
+    "test:types:ts": "npm test --prefix test/ts-use",
+    "test:types:esm": "npm test --prefix test/esm-use",
+    "test:types:cjs": "npm test --prefix test/cjs-use",
+    "test:types": "npm run test:types:ts && npm run test:types:esm && npm run test:types:cjs",
+    "test": "npm run test:es && npm run test:cjs && npm run test:types"
+  },
+  "license": "MIT",
+  "author": "Irakli Gozalishvili <dev@gozala.io>",
+  "homepage": "https://github.com/gozala/router.ts",
+  "devDependencies": {
+    "@types/node": "14.14.8",
+    "mocha": "8.2.1",
+    "playwright-test": "1.0.0",
+    "typescript": "4.1.2"
+  }
+}

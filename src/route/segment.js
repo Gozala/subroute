@@ -4,7 +4,7 @@ import { create } from "state"
  * @param {string} text
  * @returns {Segment}
  */
-export const segment = (text) => new StaticSegment(text)
+export const segment = text => new StaticSegment(text)
 
 class StaticSegment {
   /**
@@ -72,7 +72,7 @@ const parse = ({ text }, { params, segments, query }) => {
 
 /**
  * @template {any[]} Params
- * @param {StaticData} self
+ * @param {StaticSegment} self
  * @param {State<Params>} state
  * @returns {State<Params>}
  */

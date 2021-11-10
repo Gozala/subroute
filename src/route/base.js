@@ -4,6 +4,9 @@
 export const base = () => new Base()
 
 class Base {
+  get text() {
+    return ""
+  }
   /**
    * @template {any[]} In
    * @param {State<In>} state

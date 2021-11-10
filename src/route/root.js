@@ -6,6 +6,9 @@ import { create } from "state"
 export const root = () => new Root()
 
 class Root {
+  get text() {
+    return ""
+  }
   /**
    * @template {any[]} In
    * @param {State<In>} state

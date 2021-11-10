@@ -1,4 +1,4 @@
-import { VariableSegment } from "./route/interface"
+import { Param, VariableSegment } from "./route/interface"
 
 declare class Router {
   static route: SegmentReader<{}>
@@ -58,7 +58,7 @@ declare function route<
   Params extends NamedParam<string, any>[]
 >(strings: T, ...args: Params): Route<Build<{}, Params>>
 
-interface Route<Params> {
+export interface Route<Params> {
   queryParams<T extends Object>(
     params: (name: string) => NamedParam<string, T>
   ): Route<Params & T>
@@ -67,14 +67,13 @@ interface Route<Params> {
   >(
     parms: QueryParams
   ): Route<
-    Params &
-      {
-        [Key in keyof QueryParams]: QueryParams[Key] extends (
-          name: string
-        ) => NamedParam<string, infer T>
-          ? T
-          : never
-      }
+    Params & {
+      [Key in keyof QueryParams]: QueryParams[Key] extends (
+        name: string
+      ) => NamedParam<string, infer T>
+        ? T
+        : never
+    }
   >
 
   tryParse(): null | Params
@@ -87,7 +86,7 @@ type UnionOf<Variants extends any[]> = Variants extends []
   ? T | UnionOf<U>
   : never
 
-type Build<
+export type Build<
   Dict extends Object,
   Params extends NamedParam<string, any>[]
 > = Params extends []
@@ -147,3 +146,8 @@ const listPins = route`/pins/${requestID}`
   .parse()
 
 export {}
+
+declare function r(
+  strings: TemplateStringsArray,
+  ...params: NamedParam<string, unknown>[]
+): Route<Build<{}, typeof params>>

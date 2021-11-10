@@ -106,8 +106,6 @@ export const String = param(text.parse, text.format)
 export const Integer = param(int.parse, int.format)
 export const Float = param(float.parse, float.format)
 
-export const Root = new URLRoute(root())
-
 /**
  * @template {any[]} Params
  * @implements {Route<Params>}
@@ -245,7 +243,8 @@ class URLRoute {
   }
 }
 
-export const Rest = new URLRoute(RestSegment.route(String))
+export const Root = new URLRoute(root())
+// export const Rest = new URLRoute(RestSegment.route(String))
 
 /**
  * @template T
@@ -471,7 +470,7 @@ class QuerySegment {
 /**
  * @typedef {import("./route/interface").Query} Query
  * @typedef {import("./route/interface").Segment} Segment
- * @typedef {import("./route/interface").ConstantSegment} ConstantSegment
+ * @typedef {import("./route/interface").StaticSegment} StaticSegment
  * @typedef {import("./route/interface").URL} URL
  */
 /**

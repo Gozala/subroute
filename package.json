@@ -18,9 +18,9 @@
     }
   },
   "scripts": {
-    "test:node": "mocha test/test-*.spec.cjs",
-    "test:browser": "playwright-test test/test-*.cjs",
-    "test:es": "mocha test/test-*.spec.js",
+    "test:node": "mocha test/*.spec.cjs",
+    "test:browser": "playwright-test test/*.cjs",
+    "test:es": "mocha test/*.spec.js",
     "test:cjs": "npm run test:node && npm run test:browser",
     "test:types:ts": "npm test --prefix test/ts-use",
     "test:types:esm": "npm test --prefix test/esm-use",
@@ -32,9 +32,11 @@
   "author": "Irakli Gozalishvili <dev@gozala.io>",
   "homepage": "https://github.com/gozala/router.ts",
   "devDependencies": {
-    "@types/node": "14.14.8",
-    "mocha": "8.2.1",
-    "playwright-test": "1.0.0",
-    "typescript": "4.1.2"
+    "@types/mocha": "9.0.0",
+    "@types/node": "^16.11.7",
+    "mocha": "^9.1.3",
+    "playwright-test": "^7.2.0",
+    "typescript": "^4.4.4",
+    "uvu": "0.5.2"
   }
 }

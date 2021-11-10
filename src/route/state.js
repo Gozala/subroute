@@ -1,27 +1,29 @@
+import * as API from "./api.js"
+
 /**
- * @template {any[]} Params
+ * @template T
  * @param {string[]} segments
- * @param {Params} params
+ * @param {T} params
  * @param {Query} query
- * @returns {State<Params>}
+ * @returns {API.ParseState<T>}
  */
 export const create = (segments, params, query) =>
-  new Model(segments, params, query)
+  new ParseState(segments, params, query)
 
 /**
  * @param {string[]} segments
  * @param {Query} query
- * @returns {State<[]>}
+ * @returns {API.ParseState<{}>}
  */
-export const empty = (segments, query) => new Model(segments, [], query)
+export const empty = (segments, query) => new ParseState(segments, {}, query)
 
 /**
- * @template {any[]} Params
+ * @template T
  */
-class Model {
+class ParseState {
   /**
    * @param {string[]} segments
-   * @param {Params} params
+   * @param {T} params
    * @param {Query} query
    */
   constructor(segments, params, query) {
@@ -32,7 +34,7 @@ class Model {
 }
 
 /**
- * @typedef {import("./route/interface").Query} Query
+ * @typedef {import("./interface").Query} Query
  */
 /**
  * @template {any[]} Params

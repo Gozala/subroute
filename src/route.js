@@ -1,32 +1,9 @@
-import { parsePathname, parseSearch, formatURL } from "./route/url"
-import { last, butlast } from "./data/tuple"
-import * as text from "./data/string"
-import * as int from "./data/int"
-import * as float from "./data/float"
-/**
- * @template {any[]} Params
- */
-class Model {
-  /**
-   * @param {string[]} segments
-   * @param {Params} params
-   * @param {Query} query
-   */
-  constructor(segments, params, query) {
-    this.segments = segments
-    this.params = params
-    this.query = query
-  }
-}
-
-/**
- * @template {any[]} Params
- * @param {string[]} segments
- * @param {Params} params
- * @param {Query} query
- * @returns {State<Params>}
- */
-const state = (segments, params, query) => new Model(segments, params, query)
+import { parsePathname, parseSearch, formatURL } from "./route/url.js"
+import { last, butlast } from "./data/tuple.js"
+import * as text from "./data/string.js"
+import * as int from "./data/int.js"
+import * as float from "./data/float.js"
+import { create, empty } from "./route/state.js"
 
 /**
  * @template {any[]} Params
@@ -97,7 +74,12 @@ class URLRoute {
    * @returns {Route<[...Params, T]>}
    */
   param(param) {
-    return new ChainVariable(this, param)
+    /** @type {Route<Params>} */
+    const left = this
+    const right = param
+    /** @type {URLRoute<[...Params, T]>} */
+    const chain = new ChainVariable(left, right)
+    return chain
   }
 
   /**
@@ -255,16 +237,18 @@ class VariableRoute extends URLRoute {
   }
 
   /**
-   * @param {State<[]>} state
-   * @returns {?State<[T]>}
+   * @template {unknown[]} In
+   * @param {State<In>} state
+   * @returns {?State<[...In, T]>}
    */
   parseRoute(state) {
     return this.parseSegment(state)
   }
 
   /**
-   * @param {State<[T]>} state
-   * @returns {State<[]>}
+   * @template {unknown[]} In
+   * @param {State<[...In, T]>} state
+   * @returns {State<In>}
    */
   formatRoute(state) {
     return this.formatSegment(state)
@@ -337,7 +321,7 @@ class RootSegment extends BaseSegment {
    */
   formatSegment(model) {
     const { segments, params, query } = model
-    return state(["", ...segments], params, query)
+    return create(["", ...segments], params, query)
   }
 }
 
@@ -352,7 +336,7 @@ class RestSegment extends VariableRoute {
    * @param {VariableSegment<T>} inner
    */
   constructor(inner) {
-    super()
+    super(inner)
     this.inner = inner
   }
 
@@ -363,7 +347,7 @@ class RestSegment extends VariableRoute {
    */
   parseSegment(model) {
     const { segments, params, query } = model
-    const next = state([segments.join("/")], params, query)
+    const next = create([segments.join("/")], params, query)
     return this.inner.parseSegment(next)
   }
 
@@ -399,7 +383,7 @@ class RouteSegment extends BaseSegment {
     } else {
       const [first, ...rest] = segments
       if (first === text) {
-        return state(rest, params, query)
+        return create(rest, params, query)
       } else {
         return null
       }
@@ -446,7 +430,7 @@ class RouteParam extends VariableRoute {
       const [next, ...rest] = /** @type {[string, ...string[]]} */ (segments)
       const param = this.parseParam(next)
       if (param != null) {
-        return state(rest, [...params, param], query)
+        return create(rest, [...params, param], query)
       } else {
         return null
       }
@@ -476,7 +460,7 @@ class RouteParam extends VariableRoute {
     if (param == null) {
       return null
     } else {
-      return state(model.segments, [...model.params, param], model.query)
+      return create(model.segments, [...model.params, param], model.query)
     }
   }
 
@@ -538,19 +522,21 @@ class ChainConstant {
  * @template T
  * @extends {URLRoute<[...Params, T]>}
  */
-class ChainVariable {
+class ChainVariable extends URLRoute {
   /**
    * @param {Route<Params>} base
    * @param {VariableSegment<T>} next
    */
   constructor(base, next) {
+    super()
     this.base = base
     this.next = next
   }
 
   /**
-   * @param {State<[]>} state
-   * @returns {?State<[...Params, T]>}
+   * @template {any[]} In
+   * @param {State<In>} state
+   * @returns {?State<[...In, ...Params, T]>}
    */
   parseRoute(state) {
     const next = this.base.parseRoute(state)
@@ -562,14 +548,23 @@ class ChainVariable {
   }
 
   /**
-   * @param {State<[...Params, T]>} state
-   * @returns {State<[]>}
+   * @template {any[]} In
+   * @param {State<[...In, ...Params, T]>} state
+   * @returns {State<In>}
    */
   formatRoute(state) {
     return this.base.formatRoute(this.next.formatSegment(state))
   }
 }
 
+/**
+ * @template {any[]} Params
+ * @template T
+ * @param {Route<Params>} base
+ * @param {VariableSegment<T>} next
+ * @returns {Route<[...Params, T]>}
+ */
+const chain = (base, next) => new ChainVariable(base, next)
 /**
  * @template T
  * @extends {VariableRoute<T>}
@@ -629,7 +624,7 @@ class QuerySegment extends VariableRoute {
  * @param {VariableSegment<T>} route
  * @returns {VariableSegment<T> & Route<[T]>}
  */
-export const rest = (route) => new RestSegment(route)
+export const rest = route => new RestSegment(route)
 
 /**
  * @template {any[]} Left
@@ -644,7 +639,7 @@ export const concat = (left, right) => new Concatenation(left, right)
  * @param {string} text
  * @returns {Segment}
  */
-export const segment = (text) => new RouteSegment(text)
+export const segment = text => new RouteSegment(text)
 
 /**
  * @template T
@@ -710,14 +705,14 @@ export const parseHash = (route, url) =>
   )
 
 /**
- * @template {any[]} Params
+ * @template {unknown[]} Params
  * @param {Route<Params>} route
  * @param {string[]} path
  * @param {Query} query
  * @returns {?Params}
  */
 export const parse = (route, path, query) => {
-  const output = route.parseRoute(state(path, [], query))
+  const output = route.parseRoute(empty(path, query))
   if (output != null) {
     const { segments, params } = output
     if (segments.length < 1 || segments[0] == "") {

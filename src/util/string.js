@@ -65,9 +65,27 @@ export const isSubChar = (p, offset, source) => {
  * @param {API.Position} position - positoin to search from.
  * @returns {API.Position}
  */
-export const findSubString = (search, source, { offset: n, line, column }) => {
-  const offset = source.indexOf(search, n)
+export const findSubString = (search, source, position) => {
+  const offset = source.indexOf(search, position.offset)
   const target = offset < 0 ? source.length : offset + search.length
+  const { line, column } = positionAt(target, source, position)
+
+  return { offset, line, column }
+}
+
+/**
+ * Computes position at a given `offset` for in the `source` string from the
+ * provided and returns it.
+ *
+ * @param {number} offset - offset to find position for.
+ * @param {string} source -string to search in.
+ * @param {API.Position} position - positoin to search from.
+ * @returns {API.Position}
+ */
+
+export const positionAt = (offset, source, { offset: n, line, column }) => {
+  const target =
+    offset < 0 ? source.length : offset > source.length ? source.length : offset
 
   while (n < target) {
     const code = source.charCodeAt(n++)
@@ -82,7 +100,7 @@ export const findSubString = (search, source, { offset: n, line, column }) => {
     }
   }
 
-  return { offset, line, column }
+  return { offset: target, line, column }
 }
 
 /**

@@ -176,7 +176,7 @@ export interface DeadEnd<Context, Problem> {
   line: number
   column: number
   problem: Problem
-  stack: Located<Context>[]
+  context: Located<Context>[]
 }
 
 import type { Result } from "../util/result/result.js"

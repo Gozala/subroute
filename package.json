@@ -1,5 +1,5 @@
 {
-  "name": "typed-router.ts",
+  "name": "reroute",
   "version": "0.0.0-dev",
   "description": "Type-safe routing in typescript",
   "keywords": [

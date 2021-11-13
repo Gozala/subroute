@@ -14,7 +14,7 @@ export interface Capture<T> {
   end(): Syntax<T>
 }
 
-export interface Route<T> extends Syntax<T> {}
+export interface Route<T extends unknown[]> extends Syntax<Build<T>> {}
 
 export type Problem =
   | { name: "ExpectingMethod"; expecting: string }
@@ -44,3 +44,11 @@ export type Build<
   : Params extends [{ [K in infer Key]: Match<infer Value> }, ...infer Rest]
   ? Build<Rest, Dict & { [K in Key]: Value }>
   : never
+
+/**
+ * Type representing a segment of the route
+ */
+export type Segment<T = unknown> =
+  | { [K in PropertyKey]: Match<T> }
+  | string
+  | number

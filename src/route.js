@@ -78,10 +78,10 @@ const merge = (left, right) =>
 
 /**
  * @template T
- * @template {Array<{[K in PropertyKey]: API.Match<any>}|string|number>} Segments
+ * @template {API.Segment[]} Segments
  * @param {readonly string[]} strings
  * @param  {Segments} matches
- * @returns {API.Route<API.Build<Segments>>}
+ * @returns {API.Route<Segments>}
  */
 export const route = (strings, ...matches) => {
   /** @type {API.Match<*>} */
@@ -218,7 +218,7 @@ const capture = (syntax, id, capture) => new CaptureNext(id, syntax, capture)
 
 /**
  * @template {unknown} T
- * @param {API.Route<T>} route
+ * @param {API.Syntax<T>} route
  * @param {object} input
  * @param {string} input.pathname
  */
@@ -227,7 +227,7 @@ export const parsePath = (route, { pathname }) =>
 
 /**
  * @template {unknown} T
- * @param {API.Route<T>} route
+ * @param {API.Syntax<T>} route
  * @param {Object} url
  * @param {string} [url.hash]
  * @returns {null|T}
@@ -237,7 +237,7 @@ export const parseHash = (route, url) =>
 
 /**
  * @template {unknown} T
- * @param {API.Route<T>} route
+ * @param {API.Syntax<T>} route
  * @param {Object} request
  * @param {string} request.url
  * @param {string} [request.method]
@@ -259,7 +259,7 @@ export const parseRequest = (route, request) => {
 
 /**
  * @template {unknown} T
- * @param {API.Route<T>} route
+ * @param {API.Syntax<T>} route
  * @param {Parse.State<never>} state
  * @returns {T}
  */
@@ -274,7 +274,7 @@ export const parse = (route, state) => {
 
 /**
  * @template {unknown} T
- * @param {API.Route<T>} route
+ * @param {API.Syntax<T>} route
  * @param {T} value
  */
 export const format = (route, value) => {
@@ -301,3 +301,26 @@ export const format = (route, value) => {
  */
 
 export const and = (left, right) => new Syntax.And(left, right)
+
+/**
+ * @template {string} M
+ * @template T
+ * @param {M} expecting
+ * @param {T} value
+ * @returns {API.Syntax<T>}
+ */
+const expectMethod = (expecting, value) =>
+  new Syntax.Method(expecting, value, {
+    name: "ExpectingMethod",
+    expecting,
+  })
+
+/**
+ * @template {string} M
+ * @param {M} name
+ * @returns {typeof route}
+ */
+export const method =
+  name =>
+  (strings, ...matches) =>
+    and(expectMethod(name, {}), route(strings, ...matches))

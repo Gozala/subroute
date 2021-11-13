@@ -1,41 +1,26 @@
 import * as Syntax from "./syntax.js"
 import * as API from "./route/api.js"
+import * as Route from "./route.js"
 
-import {
-  route,
-  and,
+export const {
   parse,
   parseHash,
   parsePath,
   parseRequest,
   format,
   text,
-} from "./route.js"
+  route,
+  method,
+} = Route
 
-export { route, parse, parseHash, parsePath, parseRequest, format, text }
+// /**
+//  *
+//  */
+// const route = () => {
 
-/**
- * @template {string} M
- * @template T
- * @param {M} expecting
- * @param {T} value
- * @returns {API.Syntax<T>}
- */
-const expectMethod = (expecting, value) =>
-  new Syntax.Method(expecting, value, {
-    name: "ExpectingMethod",
-    expecting,
-  })
+// }
 
-/**
- * @template {string} M
- * @param {M} name
- * @returns {typeof route}
- */
-export const method =
-  name =>
-  (strings, ...matches) =>
-    and(expectMethod(name, {}), route(strings, ...matches))
+// export { route, method }
 
 export const GET = method("GET")
 export const POST = method("POST")

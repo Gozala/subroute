@@ -1,13 +1,13 @@
 import * as Parse from "./parser/api.js"
 import * as Format from "./formatter/api.js"
 import * as Syntax from "./syntax/api.js"
-import { isSubstring, findSubString, positionAt } from "../util/string.js"
-import { ok, error } from "../util/result/lib.js"
-import * as API from "../route/api.js"
+import { isSubstring, findSubString, positionAt } from "./util/string.js"
+import { ok } from "./util/result/lib.js"
 import { parseNumber } from "./parser/number.js"
 import { succeed, fail } from "./parser/parse.js"
 
 export * from "./syntax/api.js"
+
 /**
  * @template C, X, T
  * @implements {Syntax.Syntax<C, X, never, T>}
@@ -239,7 +239,7 @@ const row = (key, value) =>
  */
 export class Numeric {
   /**
-   * @param {API.NumberConfig<X, T>} config
+   * @param {Syntax.NumberConfig<X, T>} config
    */
   constructor(config) {
     this.config = config

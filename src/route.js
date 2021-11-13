@@ -1,323 +1,303 @@
-import * as Parser from "./parse.js"
+import * as Syntax from "./syntax.js"
+import * as Parse from "./parser/api.js"
 import * as API from "./route/api.js"
+import * as ParseState from "./parser/state.js"
 
 /**
  * @template T
- * @typedef {API.Parse<never, API.Problem, T>} Parse
+ * @param {string} segment
+ * @param {T} substitution
+ * @returns {API.Syntax<T>}
  */
+const replace = (segment, substitution) =>
+  new Syntax.Replace(segment, substitution, {
+    name: "Expecting",
+    expecting: segment,
+  })
 
 /**
- * @template {Object} T
- * @typedef {API.Route<never, API.Problem, T>} Router
+ * @returns {API.Syntax<string>}
+ * @param {API.Problem|null} [errorIfEmpty]
  */
+const rest = (errorIfEmpty = null) => new Syntax.Rest(errorIfEmpty)
 
 /**
- * @template {PropertyKey} Key
- * @param {Key} key
- * @returns {Router<{[K in Key]: string}>}
+ * @returns {API.Syntax<{}>}
  */
-export const text = key => new TextSegment(key)
+const end = () =>
+  new Syntax.End(
+    {},
+    {
+      name: "ExpectingEnd",
+    }
+  )
 
 /**
- * @template C, X
- * @template {PropertyKey} Key
- * @implements {API.Route<C, X, {[K in Key]: string}>}
+ * @template T
+ * @param {T} value
+ * @returns {API.Syntax<T>}
  */
-class TextSegment {
-  /**
-   * @param {Key} key
-   */
-  constructor(key) {
-    this.key = key
-  }
 
-  /**
-   * @param {API.Token<X>} token
-   * @returns {API.Route<C, X, {[K in Key]: string}>}
-   */
-  segment(token) {
-    const { key } = this
-    const parse = Parser.mapChompedString((source, value) => {
-      return /** @type {{[K in Key]: string}} */ ({ [key]: source })
-    }, Parser.chompUntil(token))
-
-    return new Route(parse)
-  }
-  /**
-   * @template {Object} U
-   * @param {API.Parse<C, X, U>} other
-   * @returns {API.Route<C, X, {[K in Key]: string} & U>}
-   */
-  param(other) {
-    return new Route(Parser.extend(this.parseRoute, other))
-  }
-
-  /**
-   * @returns {API.Parse<C, X, {[K in Key]: string}>}
-   */
-  get parseRoute() {
-    const { key } = this
-    const parse = Parser.chain(
-      Parser.getChompedString(Parser.chompUntilEndOr(`\n`)),
-      value => {
-        if (value.length > 0) {
-          return Parser.succeed(
-            /** @type {{[K in Key]: string}} */ ({ [key]: value })
-          )
-        } else {
-          return Parser.problem(ExpectingEnd)
-        }
-      }
-    )
-
-    Object.defineProperty(this, "parse", { value: parse })
-    return parse
-  }
-
-  /**
-   * @param {{[K in Key]: string}} data
-   * @param {API.FormatState<C>} state
-   */
-  formatRoute(data, state) {
-    return data[this.key]
-  }
-}
+const root = value => new Syntax.Root(value, { name: "ExpectingStart" })
 
 /**
- * @template {PropertyKey} Key
- * @param {Key} key
- * @returns {Router<{[K in Key]: API.Float}>}
+ * @param {string} segment
+ * @returns {API.Syntax<string>}
  */
-export const float = key =>
-  Route.from(named(key, Parser.float(ExpectingFloat, ExpectingFloat)))
+
+const takeUntil = segment =>
+  new Syntax.TakeUntil(segment, {
+    name: "Expecting",
+    expecting: segment,
+  })
 
 /**
- * @template {PropertyKey} Key
- * @param {Key} key
- * @returns
+ * @template {PropertyKey} ID
+ * @template T
+ * @param {ID} name
+ * @param {API.Syntax<T>} parser
+ * @returns {API.Syntax<{[K in ID]: T}>}
  */
-export const int = key =>
-  Route.from(named(key, Parser.int(ExpectingInt, ExpectingInt)))
+const row = (name, parser) => new Syntax.Variable(name, parser)
 
 /**
- * @template {PropertyKey} Key
- * @template C, X, V
- * @param {Key} key
- * @param {API.Parse<C, X, V>} parse
- * @returns {API.Parse<C, X, {[K in Key]: V}>}
+ * @template {PropertyKey} LK
+ * @template {PropertyKey} RK
+ * @template LV, RV
+ * @param {API.Syntax<{[K in LK]: LV}>} left
+ * @param {API.Syntax<{[K in RK]: RV}>} right
+ * @returns {API.Syntax<{[K in LK]: LV} & {[K in RK]: RV}>}
  */
-const named = (key, parse) =>
-  Parser.map(parse, value => /** @type {{[K in Key]: V}} */ ({ [key]: value }))
+const merge = (left, right) =>
+  new Syntax.Join(
+    (left, right) => ({ ...left, ...right }),
+    merged => [merged, merged],
+    left,
+    right
+  )
 
 /**
- * @template {Array<API.Route<never, API.Problem, Object>|string|number>} Params
+ * @template T
+ * @template {Array<{[K in PropertyKey]: API.Match<any>}|string|number>} Segments
  * @param {readonly string[]} strings
- * @param  {Params} params
- * @returns {API.Route<never, API.Problem, API.Build<never, API.Problem, {}, Params>>}
+ * @param  {Segments} matches
+ * @returns {API.Route<API.Build<Segments>>}
  */
-export const route = (strings, ...params) => {
-  /** @type {API.Route<never, API.Problem, *>} */
-  let route = Route.root({})
+export const route = (strings, ...matches) => {
+  /** @type {API.Match<*>} */
+  let route = root({})
   let offset = 0
   while (offset < strings.length) {
-    const content = strings[offset]
-    if (content.length > 0) {
-      route = route.segment({
-        content,
-        expecting: { type: "Expecting", expecting: content },
-      })
-    }
+    route = skip(route, strings[offset])
 
-    if (offset < params.length) {
-      const param = params[offset]
+    if (offset < matches.length) {
+      const group = matches[offset]
 
-      route =
-        typeof param === "string" || typeof param === "number"
-          ? route.segment({
-              content: param.toString(),
-              expecting: { type: "Expecting", expecting: param.toString() },
-            })
-          : Route.compose(route, param)
+      switch (typeof group) {
+        case "string":
+        case "number":
+          route = skip(route, group.toString())
+          break
+        default:
+          for (const [key, pattern] of Object.entries(group)) {
+            route = extend(route, key, pattern)
+          }
+      }
     }
     offset++
   }
-  return route.param(Parser.end({}, ExpectingEnd))
+
+  return route.parse === null ? route.end() : route
 }
 
 /**
- * @template C, X
- * @template {Object} T
- * @implements {API.Route<C, X, T>}
+ * @template T
+ * @param {API.Match<T>} match
+ * @param {string} section
+ * @returns {API.Match<T>}
  */
-class Route {
-  /**
-   * @template C, X, T
-   * @param {T} value
-   * @returns {API.Route<C, X, T>}
-   */
-  static root(value) {
-    return new Route(Parser.succeed(value))
-  }
-
-  /**
-   * @template C, X, T
-   * @param {API.Parse<C, X, T>} parse
-   * @returns {API.Route<C, X, T>}
-   */
-  static from(parse) {
-    return new Route(parse)
-  }
-
-  /**
-   * @template C, X, T, U
-   * @param {API.Route<C, X, T>} left
-   * @param {API.Route<C, X, U>} right
-   */
-  static compose(left, right) {
-    return new RouteComposer(left, right)
-  }
-  /**
-   * @param {API.Parse<C, X, T>} parse
-   */
-  constructor(parse) {
-    this.parseRoute = parse
-  }
-
-  /**
-   * @template U
-   * @param {API.Token<X>} token
-   * @returns {API.Route<C, X, T>}
-   */
-  segment(token) {
-    return withSegment(this, token)
-  }
-  /**
-   * @template {Object} U
-   * @param {API.Parse<C, X, U>} other
-   * @returns {API.Route<C, X, T & U>}
-   */
-  param(other) {
-    return withParam(this, other)
+const skip = (match, section) => {
+  if (section.length === 0) {
+    return match
+  } else if (match.parse == null) {
+    return match.until(section)
+  } else {
+    return merge(match, replace(section, {}))
   }
 }
 
 /**
- * @template C, X
- * @template {Object} T
- * @template {Object} U
- * @param {API.Route<C, X, T>} route
- * @param {API.Parse<C, X, U>} next
- * @returns {API.Route<C, X, T & U>}
+ * @template {PropertyKey} LK
+ * @template {PropertyKey} RK
+ * @template LV, RV
+ * @param {API.Match<{[K in LK]: LV}>} route
+ * @param {RK} id
+ * @param {API.Match<RV>} match
+ * @returns {API.Match<{[K in LK]: LV} & {[K in RK]: RV}>}
  */
-
-const withParam = (route, next) =>
-  new Route(Parser.extend(route.parseRoute, next))
-
-/**
- * @template C, X, T, U
- * @param {API.Route<C, X, T>} route
- * @param {API.Token<X>} token
- * @returns {API.Route<C, X, T>}
- */
-const withSegment = (route, { content, expecting }) =>
-  new Route(Parser.skip(route.parseRoute, Parser.token(content, expecting)))
-
-/**
- * @template C, X, T, U
- * @implements {API.Route<C, X, T & U>}
- */
-class RouteComposer {
-  /**
-   * @param {API.Route<C, X, T>} left
-   * @param {API.Route<C, X, U>} right
-   */
-  constructor(left, right) {
-    this.left = left
-    this.right = right
+const extend = (route, id, match) => {
+  if (route.parse == null) {
+    throw new SyntaxError(
+      "Route may not have two matches next to eache other, please add some delimiter between the two"
+    )
+  } else if (match.parse == null) {
+    return capture(route, id, match)
+  } else {
+    return merge(route, row(id, match))
   }
+}
 
-  get parseRoute() {
-    const parse = Parser.extend(this.left.parseRoute, this.right.parseRoute)
-    Object.defineProperty(this, "parse", {
-      value: parse,
+/**
+ * @implements {API.Capture<string>}
+ */
+class CaptureText {
+  /**
+   * @returns {API.Match<string>}
+   */
+  static new() {
+    return new this()
+  }
+  constructor() {
+    /** @type {null} */
+    this.parse
+    this.parse = null
+  }
+  /**
+   * @param {string} section
+   */
+  until(section) {
+    return takeUntil(section)
+  }
+  end() {
+    return rest({ name: "ExpectingEnd" })
+  }
+}
+
+export const text = CaptureText.new()
+
+/**
+ * @template {PropertyKey} LK
+ * @template {PropertyKey} RK
+ * @template LV, RV
+ * @implements {API.Capture<{[K in LK]: LV} & {[K in RK]: RV}>}
+ */
+class CaptureNext {
+  /**
+   * @param {RK} id
+   * @param {API.Syntax<{[K in LK]: LV}>} syntax
+   * @param {API.Capture<RV>} capture
+   */
+  constructor(id, syntax, capture) {
+    this.id = id
+    this.syntax = syntax
+    this.capture = capture
+    /** @type {null} */
+    this.parse
+    this.parse = null
+  }
+  /**
+   * @param {string} section
+   */
+  until(section) {
+    return merge(this.syntax, row(this.id, this.capture.until(section)))
+  }
+  end() {
+    return merge(this.syntax, row(this.id, this.capture.end()))
+  }
+}
+/**
+ * @template {PropertyKey} LK
+ * @template {PropertyKey} RK
+ * @template LV, RV
+ * @param {RK} id
+ * @param {API.Syntax<{[K in LK]: LV}>} syntax
+ * @param {API.Capture<RV>} capture
+ * @returns {API.Capture<{[K in LK]: LV} & {[K in RK]: RV}>}
+ */
+const capture = (syntax, id, capture) => new CaptureNext(id, syntax, capture)
+
+/**
+ * @template {unknown} T
+ * @param {API.Route<T>} route
+ * @param {object} input
+ * @param {string} input.pathname
+ */
+export const parsePath = (route, { pathname }) =>
+  parse(route, ParseState.from({ source: pathname }))
+
+/**
+ * @template {unknown} T
+ * @param {API.Route<T>} route
+ * @param {Object} url
+ * @param {string} [url.hash]
+ * @returns {null|T}
+ */
+export const parseHash = (route, url) =>
+  parse(route, ParseState.from({ source: (url.hash || "").slice(1) }))
+
+/**
+ * @template {unknown} T
+ * @param {API.Route<T>} route
+ * @param {Object} request
+ * @param {string} request.url
+ * @param {string} [request.method]
+ * @param {Headers} [request.headers]
+ * @param {URLSearchParams} [request.searchParams]
+ */
+export const parseRequest = (route, request) => {
+  const { pathname, searchParams } = new URL(request.url)
+  return parse(
+    route,
+    ParseState.from({
+      source: pathname,
+      method: request.method,
+      headers: request.headers,
+      searchParams,
     })
-    return parse
-  }
-
-  /**
-   * @param {API.Token<X>} token
-   * @returns {API.Route<C, X, T & U>}
-   */
-  segment(token) {
-    return withParam(this.left, this.right.segment(token).parseRoute)
-  }
-  /**
-   * @template {Object} E
-   * @param {API.Parse<C, X, E>} other
-   * @returns {API.Route<C, X, T & U & E>}
-   */
-  param(other) {
-    return withParam(this, other)
-  }
+  )
 }
 
-// /**
-//  * @template {Array<API.NamedParam<string, unknown>|string|number>} Params
-//  * @param {readonly string[]} strings
-//  * @param  {Params} params
-//  * @returns {API.Route<API.Build<{}, Params>>}
-//  */
-
-// export const routeWithMethod = (strings, ...params) => {
-//   const [first, ...parts] = strings
-//   if (first.startsWith("/")) {
-//     return route(strings, ...params)
-//   } else {
-//     const offset = first.indexOf("/")
-//     if (offset < 0) {
-//       const method = first.trim().toUpperCase
-//       return Object.assign(route(parts, ...params), { method })
-//     } else {
-//       const method = first.slice(0, offset).trim().toUpperCase()
-//       return Object.assign(route([first.slice(offset), ...parts], ...params), {
-//         method,
-//       })
-//     }
-//   }
-// }
-
-/** @type {API.Problem} */
-const ExpectingInt = { type: "ExpectingInt" }
-/** @type {API.Problem} */
-const ExpectingHex = { type: "ExpectingHex" }
-/** @type {API.Problem} */
-const ExpectingOctal = { type: "ExpectingOctal" }
-/** @type {API.Problem} */
-const ExpectingBinary = { type: "ExpectingBinary" }
-/** @type {API.Problem} */
-const ExpectingFloat = { type: "ExpectingFloat" }
-/** @type {API.Problem} */
-const ExpectingNumber = { type: "ExpectingNumber" }
-/** @type {API.Problem} */
-const ExpectingEnd = { type: "ExpectingEnd" }
-
 /**
- * @template T
- * @param {API.Route<never, API.Problem, T>} route
- * @param {API.Input} input
+ * @template {unknown} T
+ * @param {API.Route<T>} route
+ * @param {Parse.State<never>} state
+ * @returns {T}
  */
-export const parse = (route, input) => Parser.parseWith(route.parseRoute, input)
-
-/**
- * @template T
- * @param {API.Route<never, API.Problem, T>} route
- * @param {{pathname: string}} input
- */
-export const parsePath = (route, input) => {
-  const result = parse(route, { url: input.pathname })
+export const parse = (route, state) => {
+  const result = route.parse(state)
   if (result.ok) {
     return result.value
   } else {
-    return null
+    throw result.error
   }
 }
+
+/**
+ * @template {unknown} T
+ * @param {API.Route<T>} route
+ * @param {T} value
+ */
+export const format = (route, value) => {
+  const result = route.format({
+    value,
+    state: {
+      pathname: "",
+      context: [],
+    },
+  })
+
+  if (result.ok) {
+    return result.value
+  } else {
+    throw result.error
+  }
+}
+
+/**
+ * @template L, R
+ * @param {API.Syntax<L>} left
+ * @param {API.Syntax<R>} right
+ * @returns {API.Syntax<R>}
+ */
+
+export const and = (left, right) => new Syntax.And(left, right)

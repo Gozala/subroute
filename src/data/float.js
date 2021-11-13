@@ -2,7 +2,7 @@
  * @param {string} input
  * @returns {float|null}
  */
-export const parse = (input) => {
+export const parse = input => {
   switch (input) {
     case "":
       return null
@@ -21,7 +21,7 @@ export const parse = (input) => {
  * @param {float} value
  * @returns {string}
  */
-export const format = (value) => value.toString()
+export const format = value => value.toString()
 
 /**
  * Turns given number into a float.
@@ -29,7 +29,7 @@ export const format = (value) => value.toString()
  * @param {number} n
  * @returns {float|null}
  */
-export const from = (n) => {
+export const from = n => {
   switch (n) {
     case Infinity:
       return null
@@ -45,5 +45,5 @@ export const from = (n) => {
 }
 
 /**
- * @typedef {import('./interface').float} float
+ * @typedef {import('./api').float} float
  */

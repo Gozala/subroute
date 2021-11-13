@@ -1,13 +1,14 @@
 import * as Parse from "./api.js"
-import * as Result from "../../util/result/lib.js"
-import * as API from "../../route/api.js"
+import * as Result from "../util/result/lib.js"
+import * as Syntax from "../syntax/api.js"
+import * as Data from "../data/api.js"
 import { fail, succeed } from "./parse.js"
 import { bumpOffset } from "./state.js"
 
 /**
  * @template C, X, T
  * @param {Parse.State<C>} state
- * @param {API.NumberConfig<X, T>} config
+ * @param {Syntax.NumberConfig<X, T>} config
  * @returns {Parse.Result<C, X, T>}
  */
 export const parseNumber = (
@@ -18,8 +19,8 @@ export const parseNumber = (
 
   switch (source.charCodeAt(offset)) {
     case 0x30 /* 0 */: {
-      const zeroOffset = offset + 1
-      const baseOffset = zeroOffset + 1
+      const zeroOffset = /** @type {Data.int} */ (offset + 1)
+      const baseOffset = /** @type {Data.int} */ (zeroOffset + 1)
       switch (source.charCodeAt(zeroOffset)) {
         case 0x78 /* x */:
           return finalizeInt(
@@ -51,7 +52,7 @@ export const parseNumber = (
             expecting,
             int,
             float,
-            [zeroOffset, 0],
+            [zeroOffset, /** @type {Data.int} */ (0)],
             state
           )
       }
@@ -71,9 +72,9 @@ export const parseNumber = (
 /**
  * @template C, X, T
  * @param {X} invalid
- * @param {(input:API.Int) => Result.Result<X, T>} handler
+ * @param {(input:Data.int) => Result.Result<X, T>} handler
  * @param {number} startOffset
- * @param {[number, number]} endPos
+ * @param {[number, Data.int]} endPos
  * @param {Parse.State<C>} state
  * @returns {Parse.Result<C, X, T>}
  */
@@ -101,9 +102,9 @@ export const finalizeInt = (
  * @template C, X, T
  * @param {X} invalid
  * @param {X} expecting
- * @param {(input:API.Int) => Result.Result<X, T>} intSettings
- * @param {(input:API.Float) => Result.Result<X, T>} floatSettings
- * @param {[number, number]} intPair
+ * @param {(input:Data.int) => Result.Result<X, T>} intSettings
+ * @param {(input:Data.float) => Result.Result<X, T>} floatSettings
+ * @param {[Data.int, Data.int]} intPair
  * @param {Parse.State<C>} state
  * @returns {Parse.Result<C, X, T>}
  */
@@ -146,13 +147,14 @@ export const finalizeFloat = (
 
 /**
  * @param {string} input
- * @returns {API.Float|null}
+ * @returns {Data.float|null}
  */
 export const toFloat = input => {
   if (input.length === 0 || /[\sxbo]/.test(input)) {
     return null
   }
-  const n = +input
+
+  const n = /** @type {Data.float} */ (+input)
   return n === n ? n : null
 }
 
@@ -208,9 +210,9 @@ export const chompBase10 = (offset, source) => {
 }
 
 /**
- * @param {number} offset
+ * @param {Data.int} offset
  * @param {string} source
- * @returns {[number, number]}
+ * @returns {[Data.int, Data.int]}
  */
 export const consumeBase16 = (offset, source) => {
   for (var total = 0; offset < source.length; offset++) {
@@ -225,14 +227,14 @@ export const consumeBase16 = (offset, source) => {
       break
     }
   }
-  return [offset, total]
+  return [offset, /** @type {Data.int} */ (total)]
 }
 
 /**
  * @param {number} base
- * @param {number} offset
+ * @param {Data.int} offset
  * @param {string} source
- * @returns {[number, number]}
+ * @returns {[Data.int, Data.int]}
  */
 export const consumeBase = (base, offset, source) => {
   for (var total = 0; offset < source.length; offset++) {
@@ -240,5 +242,5 @@ export const consumeBase = (base, offset, source) => {
     if (digit < 0 || base <= digit) break
     total = base * total + digit
   }
-  return [offset, total]
+  return [offset, /** @type {Data.int} */ (total)]
 }

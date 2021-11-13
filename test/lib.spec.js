@@ -1,5 +1,5 @@
 import { describe, it, assert } from "./test.js"
-import * as lib from "../src/segment/lib.js"
+import * as lib from "../src/lib.js"
 
 const { route } = lib
 describe("template API", () => {

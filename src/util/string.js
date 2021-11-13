@@ -1,5 +1,5 @@
 import * as Char from "./char/char.js"
-import * as API from "../route/api.js"
+import * as API from "../parser/api.js"
 
 /**
  * Returns end position of the `search` string inside a `source` string. If not

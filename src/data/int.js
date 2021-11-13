@@ -2,7 +2,7 @@
  * @param {string} input
  * @returns {?int}
  */
-export const parse = (input) => {
+export const parse = input => {
   const size = input.length
   if (size === 0) {
     return null
@@ -43,7 +43,7 @@ export const parse = (input) => {
  * @param {number} value
  * @returns {?int}
  */
-export const from = (value) => {
+export const from = value => {
   switch (value) {
     case +Infinity:
       return null
@@ -61,8 +61,8 @@ export const from = (value) => {
  * @param {int} value
  * @returns {string}
  */
-export const format = (value) => value.toString()
+export const format = value => value.toString()
 
 /**
- * @typedef {import('./interface').int} int
+ * @typedef {import('./api').int} int
  */

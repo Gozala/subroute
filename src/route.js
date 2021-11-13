@@ -1,782 +1,303 @@
-import { parsePathname, parseSearch, formatURL } from "./route/url.js"
-import { last, butlast } from "./data/tuple.js"
-import * as text from "./data/string.js"
-import * as int from "./data/int.js"
-import * as float from "./data/float.js"
-import { create, empty } from "./route/state.js"
+import * as Syntax from "./syntax.js"
+import * as Parse from "./parser/api.js"
+import * as API from "./route/api.js"
+import * as ParseState from "./parser/state.js"
 
 /**
- * @template {any[]} Params
- * @implements {Route<Params>}
+ * @template T
+ * @param {string} segment
+ * @param {T} substitution
+ * @returns {API.Syntax<T>}
  */
-class URLRoute {
-  /**
-   * @template {any[]} Params
-   * @param {Route<Params>} route
-   * @returns {URLRoute<Params>}
-   */
-  static from(route) {
-    return new URLRoute(route)
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {Route<Params>} base
-   * @param {Segment} next
-   * @returns {Route<Params>}
-   */
-  static chainConstant(base, next) {
-    return new ChainConstant(base, next)
-  }
-
-  /**
-   * @param {Route<Params>} route
-   */
-  constructor(route) {
-    this.route = route
-  }
-  /**
-   * @template {any[]} In
-   * @param {State<In>} state
-   * @returns {?State<[...In, ...Params]>}
-   */
-  parseRoute(state) {
-    return this.route.parseRoute(state)
-  }
-
-  /**
-   * @template {any[]} In
-   * @param {State<[...In, ...Params]>} state
-   * @returns {State<In>}
-   */
-  formatRoute(state) {
-    return this.route.formatRoute(state)
-  }
-  /**
-   * @param {string} text
-   * @returns {Route<Params>}
-   */
-  segment(text) {
-    return this.const(segment(text))
-  }
-  /**
-   *
-   * @param {Segment} segment
-   * @returns {URLRoute<Params>}
-   */
-  const(segment) {
-    return new URLRoute(URLRoute.chainConstant(this, segment))
-  }
-
-  /**
-   * @template T
-   * @param {VariableSegment<T>} param
-   * @returns {Route<[...Params, T]>}
-   */
-  param(param) {
-    /** @type {Route<Params>} */
-    const left = this
-    const right = param
-    /** @type {URLRoute<[...Params, T]>} */
-    const chain = new ChainVariable(left, right)
-    return chain
-  }
-
-  /**
-   * @template T
-   * @param {string} name
-   * @param {QueryParam<T>} param
-   * @returns {Route<[...Params, T]>}
-   */
-  query(name, param) {
-    return new ChainVariable(this, new QuerySegment(name, param))
-  }
-
-  /**
-   * @template T
-   * @param {VariableSegment<T>} param
-   * @returns {Route<[...Params, T]>}
-   */
-  rest(param) {
-    return new ChainVariable(this, rest(param))
-  }
-
-  /**
-   * @template T
-   * @param {VariableSegment<T>} segment
-   * @returns {Route<[...Params, T]>}
-   */
-  var(segment) {
-    return new ChainVariable(this, segment)
-  }
-
-  /**
-   * @template {any[]} Etc
-   * @param {Route<Etc>} other
-   * @returns {Route<[...Params, ...Etc]>}
-   */
-  concat(other) {
-    return concat(this, other)
-  }
-
-  /**
-   * @param {Object} url
-   * @param {string} [url.pathname]
-   * @param {string} [url.search]
-   * @returns {?Params}
-   */
-  parsePath(url) {
-    return parsePath(this, url)
-  }
-
-  /**
-   * @param {Object} url
-   * @param {string} [url.hash]
-   * @param {string} [url.search]
-   * @returns {?Params}
-   */
-  parseHash(url) {
-    return parseHash(this, url)
-  }
-
-  /**
-   * @param {string[]} segments
-   * @param {Query} query
-   * @returns {?Params}
-   */
-  parse(segments, query) {
-    return parse(this, segments, query)
-  }
-
-  /**
-   * @param  {Params} params
-   * @returns {string}
-   */
-  formatPath(...params) {
-    return formatPath(this, ...params)
-  }
-
-  /**
-   * @param  {Params} params
-   * @returns {string}
-   */
-  formatHash(...params) {
-    return formatHash(this, ...params)
-  }
-
-  /**
-   * @param {Params} params
-   * @returns {URL}
-   */
-  format(...params) {
-    return format(this, ...params)
-  }
-}
+const replace = (segment, substitution) =>
+  new Syntax.Replace(segment, substitution, {
+    name: "Expecting",
+    expecting: segment,
+  })
 
 /**
- * @template {any[]} Left
- * @template {any[]} Right
- * @extends {URLRoute<[...Left, ...Right]>}
+ * @returns {API.Syntax<string>}
+ * @param {API.Problem|null} [errorIfEmpty]
  */
-class Concatenation extends URLRoute {
-  /**
-   *
-   * @param {Route<Left>} left
-   * @param {Route<Right>} right
-   */
-  constructor(left, right) {
-    super()
-    this.left = left
-    this.right = right
-  }
+const rest = (errorIfEmpty = null) => new Syntax.Rest(errorIfEmpty)
 
-  /**
-   * @param {State<[]>} state
-   * @returns {?State<[...Left, ...Right]>}
-   */
-  parseRoute(state) {
-    const right = this.right.parseRoute(state)
-    if (right) {
-      return this.left.parseRoute(right)
-    } else {
-      return right
+/**
+ * @returns {API.Syntax<{}>}
+ */
+const end = () =>
+  new Syntax.End(
+    {},
+    {
+      name: "ExpectingEnd",
     }
-  }
-
-  /**
-   * @param {State<[...Left, ...Right]>} state
-   * @returns {State<[]>}
-   */
-  formatRoute(state) {
-    throw new Error("Subclass must implement")
-  }
-}
-
-/**
- * @template T
- * @extends {URLRoute<[T]}
- * @implements {VariableSegment<T>}
- */
-class VariableRoute extends URLRoute {
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} state
-   * @returns {?State<[...Params, T]>}
-   */
-  parseSegment(state) {
-    throw new Error("Subclass must implemnet this")
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<[...Params, T]>} state
-   * @returns {State<Params>}
-   */
-  formatSegment(state) {
-    throw new Error("subclass must implement this")
-  }
-
-  /**
-   * @template {unknown[]} In
-   * @param {State<In>} state
-   * @returns {?State<[...In, T]>}
-   */
-  parseRoute(state) {
-    return this.parseSegment(state)
-  }
-
-  /**
-   * @template {unknown[]} In
-   * @param {State<[...In, T]>} state
-   * @returns {State<In>}
-   */
-  formatRoute(state) {
-    return this.formatSegment(state)
-  }
-}
-
-/**
- * @extends {URLRoute<[]>}
- * @implements {ConstantSegment}
- * @implements {Route<[]>}
- */
-class BaseSegment {
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} state
-   * @returns {?State<Params>}
-   */
-  parseSegment(state) {
-    return state
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} state
-   * @returns {State<Params>}
-   */
-  formatSegment(state) {
-    return state
-  }
-
-  /**
-   * @template {any[]} In
-   * @param {State<In>} state
-   * @returns {?State<In>}
-   */
-  parseRoute(state) {
-    return this.parseSegment(state)
-  }
-
-  /**
-   * @template {any[]} In
-   * @param {State<In>} state
-   * @returns {State<In>}
-   */
-  formatRoute(state) {
-    return this.formatSegment(state)
-  }
-}
-
-class RootSegment extends BaseSegment {
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} model
-   * @returns {?State<Params>}
-   */
-  parseSegment(model) {
-    const { segments, params, query } = model
-    const [first, ...rest] = segments
-    if (first === "" && rest.length !== 0) {
-      return state(rest, params, query)
-    } else {
-      return null
-    }
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} model
-   * @returns {State<Params>}
-   */
-  formatSegment(model) {
-    const { segments, params, query } = model
-    return create(["", ...segments], params, query)
-  }
-}
-
-/**
- * @template T
- *
- * @extends {VariableRoute<T>}
- * @implements {VariableSegment<T>}
- */
-class RestSegment extends VariableRoute {
-  /**
-   * @param {VariableSegment<T>} inner
-   */
-  constructor(inner) {
-    super(inner)
-    this.inner = inner
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} model
-   * @returns {?State<[...Params, T]>}
-   */
-  parseSegment(model) {
-    const { segments, params, query } = model
-    const next = create([segments.join("/")], params, query)
-    return this.inner.parseSegment(next)
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<[...Params, T]>} state
-   * @returns {State<Params>}
-   */
-  formatSegment(state) {
-    return this.inner.formatSegment(state)
-  }
-}
-
-class RouteSegment extends BaseSegment {
-  /**
-   * @param {string} text
-   */
-  constructor(text) {
-    super()
-    this.text = text
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} model
-   * @returns {?State<Params>}
-   */
-  parseSegment(model) {
-    const { params, segments, query } = model
-    const { text } = this
-    if (segments.length === 0) {
-      return null
-    } else {
-      const [first, ...rest] = segments
-      if (first === text) {
-        return create(rest, params, query)
-      } else {
-        return null
-      }
-    }
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} model
-   * @returns {State<Params>}
-   */
-  formatSegment(model) {
-    const { params, segments, query } = model
-    return state([this.text, ...segments], params, query)
-  }
-}
-
-/**
- * @template T
- * @extends {VariableRoute<T>}
- * @implements {QueryParam<T>}
- */
-class RouteParam extends VariableRoute {
-  /**
-   * @param {(input:string) => null|T } parseParam
-   * @param {(param:T) => string} formatParam
-   */
-  constructor(parseParam, formatParam) {
-    super()
-    this.parseParam = parseParam
-    this.formatParam = formatParam
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} model
-   * @returns {?State<[...Params, T]>}
-   */
-  parseSegment(model) {
-    const { segments, params, query } = model
-    if (segments.length === 0) {
-      return null
-    } else {
-      const [next, ...rest] = /** @type {[string, ...string[]]} */ (segments)
-      const param = this.parseParam(next)
-      if (param != null) {
-        return create(rest, [...params, param], query)
-      } else {
-        return null
-      }
-    }
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<[...Params, T]>} model
-   * @returns {State<Params>}
-   */
-  formatSegment(model) {
-    const { segments, params, query } = model
-    const segment = this.formatParam(last(params))
-    return state([segment, ...segments], butlast(params), query)
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {string} name
-   * @param {State<Params>} model
-   * @returns {?State<[...Params, T]>}
-   */
-  parseQueryParam(name, model) {
-    const value = model.query[name]
-    const param = value != null ? this.parseParam(value) : null
-    if (param == null) {
-      return null
-    } else {
-      return create(model.segments, [...model.params, param], model.query)
-    }
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {string} name
-   * @param {State<[...Params, T]>} model
-   * @returns {State<Params>}
-   */
-  formatQueryParam(name, model) {
-    const { segments, params, query } = model
-    const param = last(params)
-    const value = this.formatParam(param)
-    query[name] = value
-    return state(segments, butlast(params), query)
-  }
-}
-
-/**
- * @template {any[]} Params
- * @implements {Route<Params>}
- */
-class ChainConstant {
-  /**
-   * @param {Route<Params>} base
-   * @param {Segment} next
-   */
-  constructor(base, next) {
-    this.base = base
-    this.next = next
-  }
-
-  /**
-   * @template {any[]} In
-   * @param {State<In>} state
-   * @returns {null | State<[...In, ...Params]>}
-   */
-  parseRoute(state) {
-    const next = this.base.parseRoute(state)
-    if (next != null) {
-      return this.next.parseSegment(next)
-    } else {
-      return null
-    }
-  }
-
-  /**
-   * @template {any[]} In
-   * @param {State<[...In, ...Params]>} state
-   * @returns {State<In>}
-   */
-  formatRoute(state) {
-    return this.base.formatRoute(this.next.formatSegment(state))
-  }
-}
-
-/**
- * @template {any[]} Params
- * @template T
- * @extends {URLRoute<[...Params, T]>}
- */
-class ChainVariable extends URLRoute {
-  /**
-   * @param {Route<Params>} base
-   * @param {VariableSegment<T>} next
-   */
-  constructor(base, next) {
-    super()
-    this.base = base
-    this.next = next
-  }
-
-  /**
-   * @template {any[]} In
-   * @param {State<In>} state
-   * @returns {?State<[...In, ...Params, T]>}
-   */
-  parseRoute(state) {
-    const next = this.base.parseRoute(state)
-    if (next != null) {
-      return this.next.parseSegment(next)
-    } else {
-      return null
-    }
-  }
-
-  /**
-   * @template {any[]} In
-   * @param {State<[...In, ...Params, T]>} state
-   * @returns {State<In>}
-   */
-  formatRoute(state) {
-    return this.base.formatRoute(this.next.formatSegment(state))
-  }
-}
-
-/**
- * @template {any[]} Params
- * @template T
- * @param {Route<Params>} base
- * @param {VariableSegment<T>} next
- * @returns {Route<[...Params, T]>}
- */
-const chain = (base, next) => new ChainVariable(base, next)
-/**
- * @template T
- * @extends {VariableRoute<T>}
- */
-class QuerySegment extends VariableRoute {
-  /**
-   * @param {string} name
-   * @param {QueryParam<T>} queryParam
-   */
-  constructor(name, queryParam) {
-    super()
-    this.name = name
-    this.queryParam = queryParam
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {string} name
-   * @param {State<Params>} state
-   * @returns {?State<[...Params, T]>}
-   */
-  parseQueryParam(name, state) {
-    return this.queryParam.parseQueryParam(name, state)
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {string} name
-   * @param {State<[...Params, T]>} state
-   * @returns {State<Params>}
-   */
-  formatQueryParam(name, state) {
-    return this.queryParam.formatQueryParam(name, state)
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<Params>} state
-   * @returns {?State<[...Params, T]>}
-   */
-  parseSegment(state) {
-    return this.queryParam.parseQueryParam(this.name, state)
-  }
-
-  /**
-   * @template {any[]} Params
-   * @param {State<[...Params, T]>} state
-   * @returns {State<Params>}
-   */
-  formatSegment(state) {
-    return this.queryParam.formatQueryParam(this.name, state)
-  }
-}
-
-/**
- * @template T
- * @param {VariableSegment<T>} route
- * @returns {VariableSegment<T> & Route<[T]>}
- */
-export const rest = route => new RestSegment(route)
-
-/**
- * @template {any[]} Left
- * @template {any[]} Right
- * @param {Route<Left>} left
- * @param {Route<Right>} right
- * @returns {Route<[...Left, ...Right]>}
- */
-export const concat = (left, right) => new Concatenation(left, right)
-
-/**
- * @param {string} text
- * @returns {Segment}
- */
-export const segment = text => new RouteSegment(text)
-
-/**
- * @template T
- * @param {(input:string) => null|T} parse
- * @param {(value:T) => string} format
- * @returns {Param<T>}
- */
-export const param = (parse, format) => new RouteParam(parse, format)
-
-export const String = param(text.parse, text.format)
-export const Integer = param(int.parse, int.format)
-export const Float = param(float.parse, float.format)
-
-/** @type {Segment} */
-export const Base = new BaseSegment()
-
-/**
- * @type {Segment}
- */
-export const Root = new RootSegment()
-
-/**
- * @type {VariableSegment<string> & Route<[string]>}
- */
-export const Rest = new RestSegment(String)
-
-/**
- * @template T
- * @param {string} name
- * @param {QueryParam<T>} route
- * @returns {Param<T>}
- */
-export const query = (name, route) => new QuerySegment(name, route)
-
-/**
- * @template {any[]} Params
- * @param {Route<Params>} route
- * @param {Object} url
- * @param {string} [url.pathname]
- * @param {string} [url.search]
- * @returns {?Params}
- */
-export const parsePath = (route, url) =>
-  parse(
-    route,
-    url.pathname == null ? [] : parsePathname(url.pathname),
-    url.search == null ? {} : parseSearch(url.search)
   )
 
 /**
- * @template {any[]} Params
- * @param {Route<Params>} route
+ * @template T
+ * @param {T} value
+ * @returns {API.Syntax<T>}
+ */
+
+const root = value => new Syntax.Root(value, { name: "ExpectingStart" })
+
+/**
+ * @param {string} segment
+ * @returns {API.Syntax<string>}
+ */
+
+const takeUntil = segment =>
+  new Syntax.TakeUntil(segment, {
+    name: "Expecting",
+    expecting: segment,
+  })
+
+/**
+ * @template {PropertyKey} ID
+ * @template T
+ * @param {ID} name
+ * @param {API.Syntax<T>} parser
+ * @returns {API.Syntax<{[K in ID]: T}>}
+ */
+const row = (name, parser) => new Syntax.Variable(name, parser)
+
+/**
+ * @template {PropertyKey} LK
+ * @template {PropertyKey} RK
+ * @template LV, RV
+ * @param {API.Syntax<{[K in LK]: LV}>} left
+ * @param {API.Syntax<{[K in RK]: RV}>} right
+ * @returns {API.Syntax<{[K in LK]: LV} & {[K in RK]: RV}>}
+ */
+const merge = (left, right) =>
+  new Syntax.Join(
+    (left, right) => ({ ...left, ...right }),
+    merged => [merged, merged],
+    left,
+    right
+  )
+
+/**
+ * @template T
+ * @template {Array<{[K in PropertyKey]: API.Match<any>}|string|number>} Segments
+ * @param {readonly string[]} strings
+ * @param  {Segments} matches
+ * @returns {API.Route<API.Build<Segments>>}
+ */
+export const route = (strings, ...matches) => {
+  /** @type {API.Match<*>} */
+  let route = root({})
+  let offset = 0
+  while (offset < strings.length) {
+    route = skip(route, strings[offset])
+
+    if (offset < matches.length) {
+      const group = matches[offset]
+
+      switch (typeof group) {
+        case "string":
+        case "number":
+          route = skip(route, group.toString())
+          break
+        default:
+          for (const [key, pattern] of Object.entries(group)) {
+            route = extend(route, key, pattern)
+          }
+      }
+    }
+    offset++
+  }
+
+  return route.parse === null ? route.end() : route
+}
+
+/**
+ * @template T
+ * @param {API.Match<T>} match
+ * @param {string} section
+ * @returns {API.Match<T>}
+ */
+const skip = (match, section) => {
+  if (section.length === 0) {
+    return match
+  } else if (match.parse == null) {
+    return match.until(section)
+  } else {
+    return merge(match, replace(section, {}))
+  }
+}
+
+/**
+ * @template {PropertyKey} LK
+ * @template {PropertyKey} RK
+ * @template LV, RV
+ * @param {API.Match<{[K in LK]: LV}>} route
+ * @param {RK} id
+ * @param {API.Match<RV>} match
+ * @returns {API.Match<{[K in LK]: LV} & {[K in RK]: RV}>}
+ */
+const extend = (route, id, match) => {
+  if (route.parse == null) {
+    throw new SyntaxError(
+      "Route may not have two matches next to eache other, please add some delimiter between the two"
+    )
+  } else if (match.parse == null) {
+    return capture(route, id, match)
+  } else {
+    return merge(route, row(id, match))
+  }
+}
+
+/**
+ * @implements {API.Capture<string>}
+ */
+class CaptureText {
+  /**
+   * @returns {API.Match<string>}
+   */
+  static new() {
+    return new this()
+  }
+  constructor() {
+    /** @type {null} */
+    this.parse
+    this.parse = null
+  }
+  /**
+   * @param {string} section
+   */
+  until(section) {
+    return takeUntil(section)
+  }
+  end() {
+    return rest({ name: "ExpectingEnd" })
+  }
+}
+
+export const text = CaptureText.new()
+
+/**
+ * @template {PropertyKey} LK
+ * @template {PropertyKey} RK
+ * @template LV, RV
+ * @implements {API.Capture<{[K in LK]: LV} & {[K in RK]: RV}>}
+ */
+class CaptureNext {
+  /**
+   * @param {RK} id
+   * @param {API.Syntax<{[K in LK]: LV}>} syntax
+   * @param {API.Capture<RV>} capture
+   */
+  constructor(id, syntax, capture) {
+    this.id = id
+    this.syntax = syntax
+    this.capture = capture
+    /** @type {null} */
+    this.parse
+    this.parse = null
+  }
+  /**
+   * @param {string} section
+   */
+  until(section) {
+    return merge(this.syntax, row(this.id, this.capture.until(section)))
+  }
+  end() {
+    return merge(this.syntax, row(this.id, this.capture.end()))
+  }
+}
+/**
+ * @template {PropertyKey} LK
+ * @template {PropertyKey} RK
+ * @template LV, RV
+ * @param {RK} id
+ * @param {API.Syntax<{[K in LK]: LV}>} syntax
+ * @param {API.Capture<RV>} capture
+ * @returns {API.Capture<{[K in LK]: LV} & {[K in RK]: RV}>}
+ */
+const capture = (syntax, id, capture) => new CaptureNext(id, syntax, capture)
+
+/**
+ * @template {unknown} T
+ * @param {API.Route<T>} route
+ * @param {object} input
+ * @param {string} input.pathname
+ */
+export const parsePath = (route, { pathname }) =>
+  parse(route, ParseState.from({ source: pathname }))
+
+/**
+ * @template {unknown} T
+ * @param {API.Route<T>} route
  * @param {Object} url
  * @param {string} [url.hash]
- * @param {string} [url.search]
- * @returns {?Params}
+ * @returns {null|T}
  */
 export const parseHash = (route, url) =>
-  parse(
+  parse(route, ParseState.from({ source: (url.hash || "").slice(1) }))
+
+/**
+ * @template {unknown} T
+ * @param {API.Route<T>} route
+ * @param {Object} request
+ * @param {string} request.url
+ * @param {string} [request.method]
+ * @param {Headers} [request.headers]
+ * @param {URLSearchParams} [request.searchParams]
+ */
+export const parseRequest = (route, request) => {
+  const { pathname, searchParams } = new URL(request.url)
+  return parse(
     route,
-    parsePathname((url.hash || "").slice(1)),
-    url.search == null ? {} : parseSearch(url.search)
+    ParseState.from({
+      source: pathname,
+      method: request.method,
+      headers: request.headers,
+      searchParams,
+    })
   )
+}
 
 /**
- * @template {unknown[]} Params
- * @param {Route<Params>} route
- * @param {string[]} path
- * @param {Query} query
- * @returns {?Params}
+ * @template {unknown} T
+ * @param {API.Route<T>} route
+ * @param {Parse.State<never>} state
+ * @returns {T}
  */
-export const parse = (route, path, query) => {
-  const output = route.parseRoute(empty(path, query))
-  if (output != null) {
-    const { segments, params } = output
-    if (segments.length < 1 || segments[0] == "") {
-      return params
-    }
+export const parse = (route, state) => {
+  const result = route.parse(state)
+  if (result.ok) {
+    return result.value
+  } else {
+    throw result.error
   }
-  return null
 }
 
 /**
- * @template {any[]} Params
- * @param {Route<Params>} route
- * @param {Params} params
- * @returns {string}
+ * @template {unknown} T
+ * @param {API.Route<T>} route
+ * @param {T} value
  */
-export const formatPath = (route, ...params) =>
-  format(route, ...params).toString()
+export const format = (route, value) => {
+  const result = route.format({
+    value,
+    state: {
+      pathname: "",
+      context: [],
+    },
+  })
 
-/**
- * @template {any[]} Params
- * @param {Route<Params>} route
- * @param {Params} params
- * @returns {string}
- */
-export const formatHash = (route, ...params) =>
-  `#${format(route, ...params).toString()}`
-
-/**
- * @template {any[]} Params
- * @param {Route<Params>} route
- * @param {Params} params
- * @returns {URL}
- */
-export const format = (route, ...params) => {
-  const { segments, query } = route.formatRoute(state([], params, {}))
-
-  return formatURL(segments, query)
+  if (result.ok) {
+    return result.value
+  } else {
+    throw result.error
+  }
 }
 
 /**
- * @typedef {import("./route/interface").Query} Query
- * @typedef {import("./route/interface").Segment} Segment
- * @typedef {import("./route/interface").ConstantSegment} ConstantSegment
- * @typedef {import("./route/interface").URL} URL
- */
-/**
- * @template {any[]} Params
- * @typedef {import('./route/interface').State<Params>} State<Params>
- */
-/**
- * @template T
- * @typedef {import('./route/interface').VariableSegment<T>} VariableSegment
- */
-/**
- * @template T
- * @typedef {import('./route/interface').QueryParam<T>} QueryParam
+ * @template L, R
+ * @param {API.Syntax<L>} left
+ * @param {API.Syntax<R>} right
+ * @returns {API.Syntax<R>}
  */
 
-/**
- * @template T
- * @typedef {import('./route/interface').Param<T>} Param
- */
-
-/**
- * @template {any[]} Params
- * @typedef {import('./route/interface').Route<Params>} Route<Params>
- */
+export const and = (left, right) => new Syntax.And(left, right)

@@ -1,5 +1,9 @@
 {
+<<<<<<< HEAD
   "name": "subroute",
+=======
+  "name": "reroute",
+>>>>>>> origin/main
   "version": "0.0.0-dev",
   "description": "Type-safe routing in typescript",
   "keywords": [

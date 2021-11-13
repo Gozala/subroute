@@ -1,6 +1,6 @@
-import { describe, it } from "mocha"
-import * as assert from "uvu/assert"
-import * as lib from "../src/segment/route.js"
+import { describe, it, assert } from "./test.js"
+import * as lib from "../src/segment/lib.js"
+
 const { route } = lib
 describe("template API", () => {
   it("parse single param", () => {

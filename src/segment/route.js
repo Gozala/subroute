@@ -1,6 +1,5 @@
 import * as Syntax from "./syntax.js"
 import * as Parse from "./parser/api.js"
-import * as Format from "./formatter/api.js"
 import * as API from "./route/api.js"
 import * as ParseState from "./parser/state.js"
 
@@ -147,8 +146,6 @@ const extend = (route, id, match) => {
     return merge(route, row(id, match))
   }
 }
-
-const cid = takeUntil("foo")
 
 /**
  * @implements {API.Capture<string>}
@@ -303,34 +300,4 @@ export const format = (route, value) => {
  * @returns {API.Syntax<R>}
  */
 
-const and = (left, right) => new Syntax.And(left, right)
-
-/**
- * @template {string} M
- * @template T
- * @param {M} expecting
- * @param {T} value
- * @returns {API.Syntax<T>}
- */
-const expectMethod = (expecting, value) =>
-  new Syntax.Method(expecting, value, {
-    name: "ExpectingMethod",
-    expecting,
-  })
-
-/**
- * @template {string} M
- * @param {M} name
- * @returns {typeof route}
- */
-export const method =
-  name =>
-  (strings, ...matches) =>
-    and(expectMethod(name, {}), route(strings, ...matches))
-
-export const GET = method("GET")
-export const POST = method("POST")
-export const PUT = method("PUT")
-export const PATCH = method("PATCH")
-export const HEAD = method("PATCH")
-export const OPTIONS = method("OPTIONS")
+export const and = (left, right) => new Syntax.And(left, right)

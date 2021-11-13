@@ -1,0 +1,41 @@
+{
+<<<<<<< HEAD
+  "name": "subroute",
+=======
+  "name": "reroute",
+>>>>>>> origin/main
+  "version": "0.0.0-dev",
+  "description": "Type-safe routing in typescript",
+  "keywords": [
+    "Typescript",
+    "routing",
+    "typed"
+  ],
+  "type": "module",
+  "module": "./src/lib.js",
+  "types": "./src/lib.d.ts",
+  "exports": {
+    ".": {
+      "import": "./src/lib.js"
+    }
+  },
+  "scripts": {
+    "test:browser": "playwright-test test/*.spec.js",
+    "test:es": "mocha test/*.spec.js",
+    "test:types:ts": "npm test --prefix test/ts-use",
+    "test:types:es": "npm test --prefix test/es-use",
+    "test:types": "npm run test:types:ts && npm run test:types:es",
+    "test": "npm run test:es && npm run test:browser"
+  },
+  "license": "MIT",
+  "author": "Irakli Gozalishvili <dev@gozala.io>",
+  "homepage": "https://github.com/gozala/router.ts",
+  "devDependencies": {
+    "@types/mocha": "9.0.0",
+    "@types/node": "^16.11.7",
+    "mocha": "^9.1.3",
+    "playwright-test": "^7.2.0",
+    "typescript": "^4.4.4",
+    "uvu": "0.5.2"
+  }
+}

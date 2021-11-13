@@ -1,4 +1,4 @@
-name: stream
+name: CI
 
 on:
   push:
@@ -22,8 +22,6 @@ jobs:
       matrix:
         node-version:
           - 16
-        project:
-          - stream
     steps:
       - name: Checkout
         uses: actions/checkout@v2
@@ -63,7 +61,7 @@ jobs:
       - name: Install dependencies
         uses: bahmutov/npm-install@v1
 
-      - name: Test (ES)
+      - name: Test
         run: yarn test:es
   test-web:
     name: Test Web
@@ -86,5 +84,5 @@ jobs:
       - name: Install dependencies
         uses: bahmutov/npm-install@v1
 
-      - name: Test (Web)
+      - name: Test
         run: yarn test:web

@@ -68,7 +68,8 @@ const calc = route`/calculator/${{ a: int }}/+/${{ b: int }}`(
   ({ a, b }) => `${a + b}`
 )
 const index = route`/`(
-  () => `<a href='${format(calc, { a: 313, b: 3 })}'>Calculate 313 + 3</a>`
+  () =>
+    `<a href='${format(calc.route, { a: 313, b: 3 })}'>Calculate 313 + 3</a>`
 )
 
 const router = index.or(caluclator)

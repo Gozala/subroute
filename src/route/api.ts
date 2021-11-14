@@ -1,20 +1,36 @@
-import * as Parse from "../parser/api.js"
-import * as Format from "../formatter/api.js"
-import type { Syntax as AdvancedSyntax, Row } from "../syntax/api.js"
+import * as Parse from "../parse/api.js"
+import * as Format from "../format/api.js"
+export type { int, float } from "../data/api.js"
 
-export interface Syntax<T> extends AdvancedSyntax<never, Problem, Problem, T> {}
+export type { NumberConfig } from "../parse/api.js"
 
-export interface Parser<T> extends Parse.Parser<never, Problem, T> {}
+export type Row<K extends PropertyKey, V> = {
+  [Key in K]: V
+}
 
-export type Match<T> = Syntax<T> | Capture<T>
+export type ParseResult<T, X = Problem, C = never> = Parse.Result<C, X, T>
+export interface ParseState<C = never> extends Parse.State<C> {}
+export interface FormatInput<T, C = never> extends Format.Input<C, T> {}
+export interface FormatState<C = never> extends Format.State<C> {}
+
+export interface Route<T, X = Problem, Y = Problem, C = never>
+  extends Parse.Parser<C, X, T>,
+    Format.Formatter<C, Y, T> {}
+
+export interface Parser<T, X = Problem, C = never>
+  extends Parse.Parser<never, Problem, T> {}
+
+export type Match<T> = Route<T> | Capture<T>
 
 export interface Capture<T> {
   parse: null
-  until(section: string): Syntax<T>
-  end(): Syntax<T>
+  until(section: string): Route<T>
+  end(): Route<T>
 }
 
-export interface Route<T extends unknown[]> extends Syntax<Build<T>> {}
+export interface RouteHandler<T> extends Parser<T> {
+  or<U>(other: RouteHandler<U>): RouteHandler<T | U>
+}
 
 export type Problem =
   | { name: "ExpectingMethod"; expecting: string }

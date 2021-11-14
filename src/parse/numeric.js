@@ -1,17 +1,16 @@
 import * as Parse from "./api.js"
 import * as Result from "../util/result/lib.js"
-import * as Syntax from "../syntax/api.js"
 import * as Data from "../data/api.js"
-import { fail, succeed } from "./parse.js"
+import { fail, succeed } from "../parse.js"
 import { bumpOffset } from "./state.js"
 
 /**
  * @template C, X, T
  * @param {Parse.State<C>} state
- * @param {Syntax.NumberConfig<X, T>} config
+ * @param {Parse.NumberConfig<X, T>} config
  * @returns {Parse.Result<C, X, T>}
  */
-export const parseNumber = (
+export const parse = (
   state,
   { int, hex, octal, binary, float, invalid, expecting }
 ) => {

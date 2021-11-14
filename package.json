@@ -9,10 +9,11 @@
   ],
   "type": "module",
   "module": "./src/lib.js",
-  "types": "./src/lib.d.ts",
+  "types": "./dist/src/lib.d.ts",
   "exports": {
     ".": {
-      "import": "./src/lib.js"
+      "import": "./src/lib.js",
+      "types": "./dist/src/lib.d.ts"
     }
   },
   "scripts": {
@@ -21,7 +22,8 @@
     "test:types:ts": "npm test --prefix test/ts-use",
     "test:types:es": "npm test --prefix test/es-use",
     "test:types": "npm run test:types:ts && npm run test:types:es",
-    "test": "npm run test:es && npm run test:web"
+    "test": "npm run test:es && npm run test:web",
+    "prepack": "tsc --build"
   },
   "license": "MIT",
   "author": "Irakli Gozalishvili <dev@gozala.io>",
@@ -31,7 +33,7 @@
     "@types/node": "^16.11.7",
     "mocha": "^9.1.3",
     "playwright-test": "^7.2.0",
-    "typescript": "^4.4.4",
+    "typescript": "^4.5.1-rc",
     "uvu": "0.5.2"
   }
 }

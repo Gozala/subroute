@@ -1,4 +1,4 @@
-import { Located, Problems } from "../parser/api.js"
+import { Located, Problems } from "../parse/api.js"
 import * as result from "../util/result/lib.js"
 
 export interface Formatter<C, X, T> {

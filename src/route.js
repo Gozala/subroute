@@ -1,75 +1,103 @@
-import * as Syntax from "./syntax.js"
-import * as Parse from "./parser/api.js"
-import * as API from "./route/api.js"
-import * as ParseState from "./parser/state.js"
+import * as Route from "./route/api.js"
+import { succeed, fail, State as ParseState } from "./parse.js"
+import { isSubstring, findSubString, positionAt } from "./util/string.js"
+import { ok, error } from "./util/result/lib.js"
+import { parse as parseNumeric } from "./parse/numeric.js"
+import { row } from "./util/object.js"
+
+export * from "./route/api.js"
+export { parse, parsePath, parseHash, parseRequest } from "./parse.js"
+export { format } from "./fromat.js"
 
 /**
+ * Route that will match given `segment` as a provided `subtitution` value.
+ *
+ * @template {string} Search
  * @template T
- * @param {string} segment
+ * @param {Search} segment
  * @param {T} substitution
- * @returns {API.Syntax<T>}
+ * @returns {Route.Route<T>}
  */
-const replace = (segment, substitution) =>
-  new Syntax.Replace(segment, substitution, {
+export const replace = (segment, substitution) =>
+  new Replace(segment, substitution, {
     name: "Expecting",
     expecting: segment,
   })
 
 /**
- * @returns {API.Syntax<string>}
- * @param {API.Problem|null} [errorIfEmpty]
+ * Route that will matches rest of the input capturing it as result. If optional
+ * `errorIfEmpty` is provided parse will fail if matched input is empty.
+ *
+ * @returns {Route.Route<string>}
+ * @param {Route.Problem|null} [errorIfEmpty]
  */
-const rest = (errorIfEmpty = null) => new Syntax.Rest(errorIfEmpty)
+export const rest = (errorIfEmpty = null) => new Rest(errorIfEmpty)
 
 /**
- * @returns {API.Syntax<{}>}
+ * Matches exact end of the input, if matched provided `value` is captured
+ * otherwise error is produced.
+ *
+ * @template T
+ * @param {T} value
+ * @returns {Route.Route<value>}
  */
-const end = () =>
-  new Syntax.End(
-    {},
-    {
-      name: "ExpectingEnd",
-    }
-  )
+export const end = value =>
+  new End(value, {
+    name: "ExpectingEnd",
+  })
 
 /**
  * @template T
  * @param {T} value
- * @returns {API.Syntax<T>}
+ * @returns {Route.Route<T>}
  */
 
-const root = value => new Syntax.Root(value, { name: "ExpectingStart" })
+export const root = value => new Root(value, { name: "ExpectingStart" })
 
 /**
  * @param {string} segment
- * @returns {API.Syntax<string>}
+ * @returns {Route.Route<string>}
  */
 
-const takeUntil = segment =>
-  new Syntax.TakeUntil(segment, {
-    name: "Expecting",
-    expecting: segment,
+export const takeUntil = segment =>
+  new TakeUntil(segment, {
+    notFoundError: {
+      name: "Expecting",
+      expecting: segment,
+    },
+  })
+
+/**
+ * @param {string} segment
+ * @returns {Route.Route<string>}
+ */
+export const takeUntilOrEnd = segment =>
+  new TakeUntil(segment, {
+    emptyError: {
+      name: "Problem",
+      message: "Expected to match some content",
+    },
   })
 
 /**
  * @template {PropertyKey} ID
  * @template T
- * @param {ID} name
- * @param {API.Syntax<T>} parser
- * @returns {API.Syntax<{[K in ID]: T}>}
+ * @param {ID} id
+ * @param {Route.Route<T>} route
+ * @returns {Route.Route<{[K in ID]: T}>}
  */
-const row = (name, parser) => new Syntax.Variable(name, parser)
+export const variable = (id, route) => new Variable(id, route)
 
 /**
  * @template {PropertyKey} LK
  * @template {PropertyKey} RK
  * @template LV, RV
- * @param {API.Syntax<{[K in LK]: LV}>} left
- * @param {API.Syntax<{[K in RK]: RV}>} right
- * @returns {API.Syntax<{[K in LK]: LV} & {[K in RK]: RV}>}
+ * @param {Route.Route<{[K in LK]: LV}>} left
+ * @param {Route.Route<{[K in RK]: RV}>} right
+ * @returns {Route.Route<{[K in LK]: LV} & {[K in RK]: RV}>}
  */
-const merge = (left, right) =>
-  new Syntax.Join(
+export const merge = (left, right) =>
+  new Join(
     (left, right) => ({ ...left, ...right }),
     merged => [merged, merged],
     left,
@@ -77,14 +105,13 @@ const merge = (left, right) =>
   )
 
 /**
- * @template T
- * @template {Array<{[K in PropertyKey]: API.Match<any>}|string|number>} Segments
+ * @template {Route.Segment[]} Segments
  * @param {readonly string[]} strings
  * @param  {Segments} matches
- * @returns {API.Route<API.Build<Segments>>}
+ * @returns {Route.Route<Route.Build<Segments>>}
  */
-export const route = (strings, ...matches) => {
-  /** @type {API.Match<*>} */
+export const compileRoute = (strings, matches) => {
+  /** @type {Route.Match<*>} */
   let route = root({})
   let offset = 0
   while (offset < strings.length) {
@@ -107,14 +134,28 @@ export const route = (strings, ...matches) => {
     offset++
   }
 
-  return route.parse === null ? route.end() : route
+  return close(route)
+}
+
+/**
+ * @template {Route.Segment[]} Segments
+ * @template {string} Verb
+ * @param {Object} options
+ * @param {readonly string[]} options.strings
+ * @param {Segments} options.matches
+ * @param {Verb} [options.method]
+ *
+ */
+export const compile = ({ method, strings, matches }) => {
+  const route = compileRoute(strings, matches)
+  return method == null ? route : and(expectMethod(method, {}), route)
 }
 
 /**
  * @template T
- * @param {API.Match<T>} match
+ * @param {Route.Match<T>} match
  * @param {string} section
- * @returns {API.Match<T>}
+ * @returns {Route.Match<T>}
  */
 const skip = (match, section) => {
   if (section.length === 0) {
@@ -127,13 +168,21 @@ const skip = (match, section) => {
 }
 
 /**
+ * @template T
+ * @param {Route.Match<T>} match
+ * @returns {Route.Route<T>}
+ */
+const close = match =>
+  merge(match.parse === null ? match.end() : match, end({}))
+
+/**
  * @template {PropertyKey} LK
  * @template {PropertyKey} RK
  * @template LV, RV
- * @param {API.Match<{[K in LK]: LV}>} route
+ * @param {Route.Match<{[K in LK]: LV}>} route
  * @param {RK} id
- * @param {API.Match<RV>} match
- * @returns {API.Match<{[K in LK]: LV} & {[K in RK]: RV}>}
+ * @param {Route.Match<RV>} match
+ * @returns {Route.Match<{[K in LK]: LV} & {[K in RK]: RV}>}
  */
 const extend = (route, id, match) => {
   if (route.parse == null) {
@@ -143,16 +192,62 @@ const extend = (route, id, match) => {
   } else if (match.parse == null) {
     return capture(route, id, match)
   } else {
-    return merge(route, row(id, match))
+    return merge(route, variable(id, match))
   }
 }
 
 /**
- * @implements {API.Capture<string>}
+ * @template T
+ * @template [X=Route.Problem]
+ * @template [C=never]
+ * @param {Route.NumberConfig<X, T>} config
+ * @returns {Route.Route<T, X, X, C>}
+ */
+
+export const numeric = config => new Numeric(config)
+
+/**
+ * @template [X=Route.Problem]
+ * @template [C=never]
+ * @param {X} expecting
+ * @param {X} invalid
+ */
+
+export const int = (expecting, invalid) =>
+  numeric({
+    int: ok,
+    hex: () => error(invalid),
+    octal: () => error(invalid),
+    binary: () => error(invalid),
+    float: () => error(invalid),
+    invalid,
+    expecting,
+  })
+
+/**
+ * @template [X=Route.Problem]
+ * @template [C=never]
+ * @param {X} expecting
+ * @param {X} invalid
+ */
+
+export const float = (expecting, invalid) =>
+  numeric({
+    int: v => ok(/** @type {Route.float} */ (v)),
+    hex: () => error(invalid),
+    octal: () => error(invalid),
+    binary: () => error(invalid),
+    float: ok,
+    invalid,
+    expecting,
+  })
+
+/**
+ * @implements {Route.Capture<string>}
  */
 class CaptureText {
   /**
-   * @returns {API.Match<string>}
+   * @returns {Route.Match<string>}
    */
   static new() {
     return new this()
@@ -169,7 +264,7 @@ class CaptureText {
     return takeUntil(section)
   }
   end() {
-    return rest({ name: "ExpectingEnd" })
+    return takeUntilOrEnd("/")
   }
 }
 
@@ -179,13 +274,13 @@ export const text = CaptureText.new()
  * @template {PropertyKey} LK
  * @template {PropertyKey} RK
  * @template LV, RV
- * @implements {API.Capture<{[K in LK]: LV} & {[K in RK]: RV}>}
+ * @implements {Route.Capture<{[K in LK]: LV} & {[K in RK]: RV}>}
  */
 class CaptureNext {
   /**
    * @param {RK} id
-   * @param {API.Syntax<{[K in LK]: LV}>} syntax
-   * @param {API.Capture<RV>} capture
+   * @param {Route.Route<{[K in LK]: LV}>} syntax
+   * @param {Route.Capture<RV>} capture
    */
   constructor(id, syntax, capture) {
     this.id = id
@@ -199,10 +294,10 @@ class CaptureNext {
    * @param {string} section
    */
   until(section) {
-    return merge(this.syntax, row(this.id, this.capture.until(section)))
+    return merge(this.syntax, variable(this.id, this.capture.until(section)))
   }
   end() {
-    return merge(this.syntax, row(this.id, this.capture.end()))
+    return merge(this.syntax, variable(this.id, this.capture.end()))
   }
 }
 /**
@@ -210,94 +305,435 @@ class CaptureNext {
  * @template {PropertyKey} RK
  * @template LV, RV
  * @param {RK} id
- * @param {API.Syntax<{[K in LK]: LV}>} syntax
- * @param {API.Capture<RV>} capture
- * @returns {API.Capture<{[K in LK]: LV} & {[K in RK]: RV}>}
+ * @param {Route.Route<{[K in LK]: LV}>} syntax
+ * @param {Route.Capture<RV>} capture
+ * @returns {Route.Capture<{[K in LK]: LV} & {[K in RK]: RV}>}
  */
 const capture = (syntax, id, capture) => new CaptureNext(id, syntax, capture)
 
 /**
- * @template {unknown} T
- * @param {API.Route<T>} route
- * @param {object} input
- * @param {string} input.pathname
+ * @template L, R
+ * @param {Route.Route<L>} left
+ * @param {Route.Route<R>} right
+ * @returns {Route.Route<R>}
  */
-export const parsePath = (route, { pathname }) =>
-  parse(route, ParseState.from({ source: pathname }))
+
+export const and = (left, right) => new And(left, right)
 
 /**
- * @template {unknown} T
- * @param {API.Route<T>} route
- * @param {Object} url
- * @param {string} [url.hash]
- * @returns {null|T}
- */
-export const parseHash = (route, url) =>
-  parse(route, ParseState.from({ source: (url.hash || "").slice(1) }))
-
-/**
- * @template {unknown} T
- * @param {API.Route<T>} route
- * @param {Object} request
- * @param {string} request.url
- * @param {string} [request.method]
- * @param {Headers} [request.headers]
- * @param {URLSearchParams} [request.searchParams]
- */
-export const parseRequest = (route, request) => {
-  const { pathname, searchParams } = new URL(request.url)
-  return parse(
-    route,
-    ParseState.from({
-      source: pathname,
-      method: request.method,
-      headers: request.headers,
-      searchParams,
-    })
-  )
-}
-
-/**
- * @template {unknown} T
- * @param {API.Route<T>} route
- * @param {Parse.State<never>} state
- * @returns {T}
- */
-export const parse = (route, state) => {
-  const result = route.parse(state)
-  if (result.ok) {
-    return result.value
-  } else {
-    throw result.error
-  }
-}
-
-/**
- * @template {unknown} T
- * @param {API.Route<T>} route
+ * @template {string} M
+ * @template T
+ * @param {M} expecting
  * @param {T} value
+ * @returns {Route.Route<T>}
  */
-export const format = (route, value) => {
-  const result = route.format({
-    value,
-    state: {
-      pathname: "",
-      context: [],
-    },
+const expectMethod = (expecting, value) =>
+  new Method(expecting, value, {
+    name: "ExpectingMethod",
+    expecting,
   })
 
-  if (result.ok) {
-    return result.value
-  } else {
-    throw result.error
+/**
+ * @template C, X, T
+ * @implements {Route.Route<T, X, never, C>}
+ */
+class Root {
+  /**
+   * @param {T} value
+   * @param {X} error
+   */
+  constructor(value, error) {
+    this.error = error
+    this.value = value
+  }
+  /**
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    if (state.offset === 0) {
+      return succeed(this.value, state)
+    } else {
+      return fail(this.error, state)
+    }
+  }
+  /**
+   * @param {Route.FormatInput<T, C>} state
+   */
+  format({ state }) {
+    return ok(state)
   }
 }
 
 /**
- * @template L, R
- * @param {API.Syntax<L>} left
- * @param {API.Syntax<R>} right
- * @returns {API.Syntax<R>}
+ * @template C, X, T
+ * @implements {Route.Route<T, X, never, C>}
+ */
+class End {
+  /**
+   * @param {T} value
+   * @param {X} error
+   */
+  constructor(value, error) {
+    this.value = value
+    this.error = error
+  }
+  /**
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    const { error, value } = this
+    return state.offset < state.source.length
+      ? fail(error, state)
+      : succeed(value, state)
+  }
+  /**
+   * @param {Route.FormatInput<T, C>} state
+   */
+  format({ state }) {
+    return ok(state)
+  }
+}
+/**
+ * @template C, X, T
+ * @template {string} Match
+ * @implements {Route.Route<T, X, never, C>}
+ */
+class Replace {
+  /**
+   * @param {Match} match
+   * @param {T} value
+   * @param {X} error
+   */
+  constructor(match, value, error) {
+    this.match = match
+    this.value = value
+    this.error = error
+  }
+  /**
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    const { match, error, value } = this
+    const { offset, line, column } = isSubstring(match, state.source, state)
+
+    if (offset === -1) {
+      return fail(error, state)
+    } else {
+      return succeed(value, { ...state, offset, line, column })
+    }
+  }
+  /**
+   * @param {Route.FormatInput<T, C>} state
+   */
+  format({ state }) {
+    return ok({ ...state, pathname: `${state.pathname}${this.match}` })
+  }
+}
+
+/**
+ * @template C, X, Y, T
+ * @template {PropertyKey} ID
+ * @implements {Route.Route<{[K in ID]: T}, X, Y, C>}
+ */
+class Variable {
+  /**
+   * @param {ID} id
+   * @param {Route.Route<T, X, Y, C>} inner
+   */
+  constructor(id, inner) {
+    this.id = id
+    this.inner = inner
+  }
+
+  /**
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    const { id } = this
+    const result = this.inner.parse(state)
+    if (result.ok) {
+      return succeed(row(id, result.value), result.state)
+    } else {
+      return result
+    }
+  }
+  /**
+   * @param {Route.FormatInput<{[key in ID]: T}, C>} input
+   */
+  format({ value, state }) {
+    return this.inner.format({ value: value[this.id], state })
+  }
+}
+
+/**
+ * @template C, X
+ * @template {string} Match
+ * @implements {Route.Route<string, X, never, C>}
+ */
+class TakeUntil {
+  /**
+   * @param {Match} match
+   * @param {Object} config
+   * @param {X} [config.notFoundError]
+   * @param {X} [config.emptyError]
+   */
+  constructor(match, { notFoundError, emptyError }) {
+    this.match = match
+    this.notFoundError = notFoundError
+    this.emptyError = emptyError
+  }
+
+  /**
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    const { match, notFoundError, emptyError } = this
+    const { source, context } = state
+    const { offset, line, column } = findSubString(match, source, state)
+    const adjustedOffset = offset < 0 ? state.source.length : offset
+
+    return offset < 0 && notFoundError
+      ? fail(notFoundError, { line, column, context })
+      : state.offset >= adjustedOffset && emptyError
+      ? fail(emptyError, { line, column, context })
+      : succeed(source.slice(state.offset, adjustedOffset), {
+          ...state,
+          offset: adjustedOffset,
+          line,
+          column,
+        })
+  }
+  /**
+   * @param {Route.FormatInput<string, C>} input
+   */
+
+  format({ value, state }) {
+    return ok({ ...state, pathname: `${state.pathname}${value}` })
+  }
+}
+
+/**
+ * @template C, X
+ * @implements {Route.Route<string, X, never, C>}
+ */
+class Rest {
+  /**
+   * @param {X|null} emptyError
+   */
+  constructor(emptyError) {
+    this.emptyError = emptyError
+  }
+  /**
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    const { emptyError } = this
+    const { source, context } = state
+    const { offset, line, column } = positionAt(source.length, source, state)
+    const slice = source.slice(state.offset)
+    const result =
+      slice.length === 0 && emptyError
+        ? fail(emptyError, { line, column, context })
+        : succeed(slice, { ...state, offset, line, column })
+    return result
+  }
+  /**
+   * @param {Route.FormatInput<string, C>} input
+   */
+  format({ value, state }) {
+    return ok({ ...state, pathname: `${state.pathname}${value}` })
+  }
+}
+
+/**
+ * @template C, X, T
+ * @implements {Route.Route<T, X, never, C>}
+ */
+class Method {
+  /**
+   * @param {string} expect
+   * @param {T} value
+   * @param {X} error
+   */
+  constructor(expect, value, error) {
+    this.expect = expect.toUpperCase()
+    this.value = value
+    this.error = error
+  }
+  /**
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    if ((state.method || "").toUpperCase() !== this.expect) {
+      return fail(this.error, state)
+    } else {
+      return succeed(this.value, state)
+    }
+  }
+  /**
+   *
+   * @param {Route.FormatInput<T, C>} input
+   */
+  format({ state }) {
+    return ok({
+      ...state,
+      method: this.expect,
+    })
+  }
+}
+
+/**
+ * @template C, X, Y, L, R, LR
+ * @implements {Route.Route<LR, X, Y, C>}
+ */
+class Join {
+  /**
+   * @param {(left:L, right:R) => LR} join
+   * @param {(lr:LR) => [L, R]} split
+   * @param {Route.Route<L, X, Y, C>} left
+   * @param {Route.Route<R, X, Y, C>} right
+   */
+  constructor(join, split, left, right) {
+    this.join = join
+    this.split = split
+    this.left = left
+    this.right = right
+  }
+  /**
+   *
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    const { left, right, join } = this
+    const leftResult = left.parse(state)
+    if (!leftResult.ok) {
+      return leftResult
+    } else {
+      const rightResult = right.parse(leftResult.state)
+      return rightResult.ok
+        ? succeed(join(leftResult.value, rightResult.value), rightResult.state)
+        : rightResult
+    }
+  }
+  /**
+   * @param {Route.FormatInput<LR, C>} input
+   */
+  format({ state, value }) {
+    const { left, right } = this
+    const [leftValue, rightValue] = this.split(value)
+    const leftResult = left.format({ value: leftValue, state })
+    if (leftResult.ok) {
+      return right.format({ value: rightValue, state: leftResult.value })
+    } else {
+      return leftResult
+    }
+  }
+}
+
+/**
+ * @template C, X, Y, L, R
+ */
+class And {
+  /**
+   * @param {Route.Route<L, X, Y, C>} left
+   * @param {Route.Route<R, X, Y, C>} right
+   */
+  constructor(left, right) {
+    this.left = left
+    this.right = right
+  }
+  /**
+   *
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    const { left, right } = this
+    const leftResult = left.parse(state)
+    if (!leftResult.ok) {
+      return leftResult
+    } else {
+      return right.parse(leftResult.state)
+    }
+  }
+  /**
+   * @param {Route.FormatInput<R, C>} input
+   */
+  format(input) {
+    return this.right.format(input)
+  }
+}
+
+/**
+ * @template {string[]} T
+ * @param  {T} options
+ * @returns {Route.Route<T[number]>}
  */
 
-export const and = (left, right) => new Syntax.And(left, right)
+export const enumerate = (...options) =>
+  new Enum(options, {
+    name: "Expecting",
+    expecting: options.join("|"),
+  })
+
+/**
+ * @template {string} T
+ * @template X
+ * @template [C=never]
+ * @implements {Route.Route<T, X, never, C>}
+ */
+class Enum {
+  /**
+   * @param {T[]} options
+   * @param {X} error
+   */
+  constructor(options, error) {
+    this.options = options
+    this.error = error
+  }
+  /**
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    const { options, error } = this
+    for (const option of options) {
+      const { offset, line, column } = isSubstring(option, state.source, state)
+      if (offset >= 0) {
+        return succeed(option, { ...state, offset, line, column })
+      }
+    }
+
+    return fail(error, state)
+  }
+  /**
+   * @param {Route.FormatInput<T, C>} state
+   */
+  format({ state, value }) {
+    return ok({ ...state, pathname: `${state.pathname}${value}` })
+  }
+}
+/**
+ * @template C, X, T
+ * @implements {Route.Route<T, X, X, C>}
+ */
+class Numeric {
+  /**
+   * @param {Route.NumberConfig<X, T>} config
+   */
+  constructor(config) {
+    this.config = config
+  }
+  /**
+   *
+   * @param {Route.ParseState<C>} state
+   */
+  parse(state) {
+    return parseNumeric(state, this.config)
+  }
+  /**
+   *
+   * @param {Route.FormatInput<T, C>} input
+   */
+  format({ value, state }) {
+    return ok({ ...state, pathname: `${state.pathname}${value}` })
+  }
+}

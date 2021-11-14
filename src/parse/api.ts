@@ -1,3 +1,5 @@
+import type * as Data from "../util/result/result.js"
+
 export interface Parser<C, X, T> {
   parse(state: State<C>): Result<C, X, T>
 }
@@ -64,3 +66,13 @@ import type { Char } from "../util/char/char.js"
 import type { int, float } from "../data/api.js"
 
 export type { Char, int, float }
+
+export interface NumberConfig<X, T> {
+  int(int: int): Data.Result<X, T>
+  hex(int: int): Data.Result<X, T>
+  octal(int: int): Data.Result<X, T>
+  binary(int: int): Data.Result<X, T>
+  float(float: float): Data.Result<X, T>
+  invalid: X
+  expecting: X
+}

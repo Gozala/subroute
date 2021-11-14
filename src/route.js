@@ -61,8 +61,22 @@ export const root = value => new Root(value, { name: "ExpectingStart" })
 
 export const takeUntil = segment =>
   new TakeUntil(segment, {
-    name: "Expecting",
-    expecting: segment,
+    notFoundError: {
+      name: "Expecting",
+      expecting: segment,
+    },
+  })
+
+/**
+ * @param {string} segment
+ * @returns {Route.Route<string>}
+ */
+export const takeUntilOrEnd = segment =>
+  new TakeUntil(segment, {
+    emptyError: {
+      name: "Problem",
+      message: "Expected to match some content",
+    },
   })
 
 /**
@@ -120,7 +134,7 @@ export const compileRoute = (strings, matches) => {
     offset++
   }
 
-  return route.parse === null ? route.end() : route
+  return close(route)
 }
 
 /**
@@ -152,6 +166,14 @@ const skip = (match, section) => {
     return merge(match, replace(section, {}))
   }
 }
+
+/**
+ * @template T
+ * @param {Route.Match<T>} match
+ * @returns {Route.Route<T>}
+ */
+const close = match =>
+  merge(match.parse === null ? match.end() : match, end({}))
 
 /**
  * @template {PropertyKey} LK
@@ -242,7 +264,7 @@ class CaptureText {
     return takeUntil(section)
   }
   end() {
-    return rest({ name: "ExpectingEnd" })
+    return takeUntilOrEnd("/")
   }
 }
 
@@ -360,7 +382,7 @@ class End {
    */
   parse(state) {
     const { error, value } = this
-    return state.offset >= state.source.length - 1
+    return state.offset < state.source.length
       ? fail(error, state)
       : succeed(value, state)
   }
@@ -451,37 +473,35 @@ class Variable {
 class TakeUntil {
   /**
    * @param {Match} match
-   * @param {X} error
+   * @param {Object} config
+   * @param {X} [config.notFoundError]
+   * @param {X} [config.emptyError]
    */
-  constructor(match, error) {
+  constructor(match, { notFoundError, emptyError }) {
     this.match = match
-    this.error = error
+    this.notFoundError = notFoundError
+    this.emptyError = emptyError
   }
 
   /**
    * @param {Route.ParseState<C>} state
    */
   parse(state) {
-    const { offset, line, column } = findSubString(
-      this.match,
-      state.source,
-      state
-    )
+    const { match, notFoundError, emptyError } = this
+    const { source, context } = state
+    const { offset, line, column } = findSubString(match, source, state)
+    const adjustedOffset = offset < 0 ? state.source.length : offset
 
-    if (offset === -1) {
-      return fail(this.error, {
-        line,
-        column,
-        context: state.context,
-      })
-    } else {
-      return succeed(state.source.slice(state.offset, offset), {
-        ...state,
-        offset,
-        line,
-        column,
-      })
-    }
+    return offset < 0 && notFoundError
+      ? fail(notFoundError, { line, column, context })
+      : state.offset >= adjustedOffset && emptyError
+      ? fail(emptyError, { line, column, context })
+      : succeed(source.slice(state.offset, adjustedOffset), {
+          ...state,
+          offset: adjustedOffset,
+          line,
+          column,
+        })
   }
   /**
    * @param {Route.FormatInput<string, C>} input

@@ -35,13 +35,17 @@ export interface RouteBinder<T, X = Problem, Y = Problem, C = never>
   <U>(handler: (params: T) => U): RouteHandler<T, U>
 }
 
-export interface RouteHandler<T, U> extends Parser<U>, Formatter<T> {
-  route: Route<T>
-  or<E>(other: Parser<E>): Router<U | E>
+export interface Handler<T, C = never> {
+  handle(state: ParseState<C>): ParseResult<T>
 }
 
-export interface Router<T> extends Parser<T> {
-  or<U>(other: Parser<U>): Router<T | U>
+export interface RouteHandler<T, U> extends Handler<U> {
+  readonly route: Route<T>
+  or<E>(other: Handler<E>): Router<U | E>
+}
+
+export interface Router<T> extends Handler<T> {
+  or<U>(other: Handler<U>): Router<T | U>
 }
 
 export type Problem =

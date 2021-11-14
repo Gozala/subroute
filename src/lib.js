@@ -1,6 +1,6 @@
 import * as API from "./route/api.js"
 import * as Route from "./route.js"
-import { succeed } from "./parse.js"
+import { succeed, State } from "./parse.js"
 
 export const {
   rest,
@@ -56,9 +56,15 @@ class RouteHandler {
     this.route = route
   }
   /**
+   * @type {API.Router<U>}
+   */
+  get router() {
+    return this
+  }
+  /**
    * @param {API.ParseState} state
    */
-  parse(state) {
+  handle(state) {
     const result = this.route.parse(state)
     if (result.ok) {
       const value = this.handler(result.value)
@@ -69,16 +75,8 @@ class RouteHandler {
   }
 
   /**
-   *
-   * @param {API.FormatInput<T>} input
-   */
-  format(input) {
-    return this.route.format(input)
-  }
-
-  /**
    * @template E
-   * @param {API.Parser<E>} other
+   * @param {API.Handler<E>} other
    * @returns {API.Router<U|E>}
    */
   or(other) {
@@ -88,8 +86,8 @@ class RouteHandler {
 
 /**
  * @template L, R
- * @param {API.Parser<L>} left
- * @param {API.Parser<R>} right
+ * @param {API.Handler<L>} left
+ * @param {API.Handler<R>} right
  * @returns {API.Router<L|R>}
  */
 export const or = (left, right) => new Or(left, right)
@@ -100,8 +98,8 @@ export const or = (left, right) => new Or(left, right)
  */
 class Or {
   /**
-   * @param {API.Parser<L>} left
-   * @param {API.Parser<R>} right
+   * @param {API.Handler<L>} left
+   * @param {API.Handler<R>} right
    */
 
   constructor(left, right) {
@@ -111,17 +109,17 @@ class Or {
   /**
    * @param {API.ParseState} state
    */
-  parse(state) {
-    const result = this.left.parse(state)
-    return result.ok ? result : this.right.parse(state)
+  handle(state) {
+    const result = this.left.handle(state)
+    return result.ok ? result : this.right.handle(state)
   }
   /**
    * @template T
-   * @param {API.Parser<T>} other
+   * @param {API.Handler<T>} other
    * @returns {API.Router<L|R|T>}
    */
   or(other) {
-    /** @type {API.Parser<L|R>} */
+    /** @type {API.Handler<L|R>} */
     const self = this
     return or(self, other)
   }
@@ -144,3 +142,31 @@ const ExpectingFloat = { name: "ExpectingFloat" }
 export const int = Route.int(ExpectingInt, ExpectingInt)
 
 export const float = Route.float(ExpectingFloat, ExpectingFloat)
+
+/**
+ * @template C, X
+ * @template {unknown} T
+ * @param {API.Handler<T>} handler
+ * @param {Object} request
+ * @param {string} request.url
+ * @param {string} [request.method]
+ * @param {Headers} [request.headers]
+ * @param {URLSearchParams} [request.searchParams]
+ */
+export const handle = (handler, request) => {
+  const { pathname, searchParams } = new URL(request.url)
+  const result = handler.handle(
+    State.from({
+      source: pathname,
+      method: request.method,
+      headers: request.headers,
+      searchParams,
+    })
+  )
+
+  if (result.ok) {
+    return result.value
+  } else {
+    throw result.error
+  }
+}

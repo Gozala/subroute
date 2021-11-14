@@ -2,7 +2,7 @@ import { describe, it, assert } from "./test.js"
 import * as lib from "../src/lib.js"
 
 const { route } = lib
-describe("template API", () => {
+describe("route template API", () => {
   it("parse single param", () => {
     const r = route`/car/${{ cid: lib.text }}`
     assert.equal(typeof r, "function")

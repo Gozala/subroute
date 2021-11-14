@@ -2,23 +2,27 @@ import { describe, it, assert } from "./test.js"
 import * as lib from "../src/lib.js"
 
 const { route } = lib
-describe("template API", () => {
+describe("lib template API", () => {
   it("parse single param", () => {
     const r = route`/car/${{ cid: lib.text }}`(input => input.cid)
 
     assert.equal(typeof r, "object")
-    assert.equal(typeof r.parse, "function")
+    assert.equal(typeof r.handle, "function")
     assert.equal(typeof r.or, "function")
 
-    assert.throws(() => lib.parsePath(r, { pathname: "" }), Error)
+    assert.throws(
+      () => console.log(lib.handle(r, { url: "http://rou.te" })),
+      Error
+    )
 
-    assert.throws(() => lib.parsePath(r, { pathname: "/car/" }), Error)
+    assert.throws(() => lib.handle(r, { url: "http://rou.te/car/" }), Error)
     assert.equal(
-      lib.parsePath(r, { pathname: "/car/bafy...hash" }),
+      lib.handle(r, { url: "http://rou.te/car/bafy...hash" }),
       "bafy...hash"
     )
     assert.throws(
-      () => lib.parsePath(r, { pathname: "car/bafy...hash" }),
+      () =>
+        console.log(lib.handle(r, { url: "http://rou.te/car/bafy...hash/" })),
       Error
     )
   })
@@ -26,13 +30,13 @@ describe("template API", () => {
   it("format single param", () => {
     const r = route`/car/${{ cid: lib.text }}`(data => data.cid)
     // @ts-expect-error - Property 'cid' is missing
-    assert.equal(lib.format(r, {}).pathname, "/car/undefined")
+    assert.equal(lib.format(r.route, {}).pathname, "/car/undefined")
 
     // @ts-expect-error - Type 'number' is not assignable to type 'string'.
-    assert.equal(lib.format(r, { cid: 1 }).pathname, "/car/1")
+    assert.equal(lib.format(r.route, { cid: 1 }).pathname, "/car/1")
 
     assert.equal(
-      lib.format(r, { cid: "bafy...hash" }).pathname,
+      lib.format(r.route, { cid: "bafy...hash" }).pathname,
       "/car/bafy...hash"
     )
   })
@@ -41,13 +45,16 @@ describe("template API", () => {
     const method = "status"
     const r = route`/${method}/${{ cid: lib.text }}`(data => [data.cid])
 
-    assert.throws(() => lib.parsePath(r, { pathname: "" }), Error)
-    assert.throws(() => lib.parsePath(r, { pathname: "/status/" }), Error)
-    assert.equal(lib.parsePath(r, { pathname: "/status/bafy...hash" }), [
+    assert.throws(() => lib.handle(r, { url: "http://rou.te" }), Error)
+    assert.throws(() => lib.handle(r, { url: "http://rou.te/status/" }), Error)
+    assert.equal(lib.handle(r, { url: "http://rou.te/status/bafy...hash" }), [
       "bafy...hash",
     ])
     assert.throws(
-      () => lib.parsePath(r, { pathname: "status/bafy...hash" }),
+      () =>
+        console.log(
+          lib.handle(r, { url: "http://rou.te/status/bafy...hash/" })
+        ),
       Error
     )
   })
@@ -58,14 +65,14 @@ describe("template API", () => {
       home: `~/${data.dir}`,
     }))
 
-    const out = lib.parsePath(r, { pathname: "/@gozala/home" })
+    const out = lib.handle(r, { url: "http://disk.io/@gozala/home" })
     // ts inference works here
     assert.equal(out.home, "~/home")
     assert.equal(out, { home: "~/home" })
 
     const r2 = lib.route`/@${user}${{ dir: lib.text }}`(data => data.dir)
 
-    assert.equal(lib.parsePath(r2, { pathname: "/@gozalahome" }), "home")
+    assert.equal(lib.handle(r2, { url: "http://disk.io/@gozalahome" }), "home")
   })
 })
 
@@ -77,7 +84,7 @@ describe("method", () => {
 
     assert.throws(
       () =>
-        lib.parseRequest(r, {
+        lib.handle(r, {
           method: "GET",
           url: "https://ipfs.io/ipfs/QmHash",
         }),
@@ -85,7 +92,7 @@ describe("method", () => {
     )
 
     assert.equal(
-      lib.parseRequest(r, {
+      lib.handle(r, {
         method: "POST",
         url: "https://ipfs.io/ipfs/QmHash",
       }),
@@ -97,7 +104,7 @@ describe("method", () => {
     const r = lib.route`/ipfs/${{ cid: lib.text }}`(data => data)
 
     assert.equal(
-      lib.parseRequest(r, {
+      lib.handle(r, {
         method: "GET",
         url: "https://ipfs.io/ipfs/QmHash",
       }),
@@ -105,7 +112,7 @@ describe("method", () => {
     )
 
     assert.equal(
-      lib.parseRequest(r, {
+      lib.handle(r, {
         method: "POST",
         url: "https://ipfs.io/ipfs/QmHash",
       }),
@@ -132,7 +139,7 @@ describe("or combinator", () => {
   it("will not match without method", () => {
     assert.throws(
       () =>
-        lib.parseRequest(post.or(get).or(stat), {
+        lib.handle(post.or(get).or(stat), {
           url: "https://web3.storage/car/bafy_hash",
         }),
       Error,
@@ -142,7 +149,7 @@ describe("or combinator", () => {
 
   it("mathes by method and route", () => {
     assert.equal(
-      lib.parseRequest(post.or(get).or(stat), {
+      lib.handle(post.or(get).or(stat), {
         url: "https://web3.storage/car/bafy_hash",
         method: "GET",
       }),
@@ -151,7 +158,7 @@ describe("or combinator", () => {
     )
 
     assert.equal(
-      lib.parseRequest(post.or(get).or(stat), {
+      lib.handle(post.or(get).or(stat), {
         url: "https://web3.storage/car/bafy_hash",
         method: "POST",
       }),
@@ -163,7 +170,7 @@ describe("or combinator", () => {
   it("does not match wrong method", () => {
     assert.throws(
       () =>
-        lib.parseRequest(post.or(get).or(stat), {
+        lib.handle(post.or(get).or(stat), {
           url: "https://web3.storage/car/bafy_hash",
           method: "PUT",
         }),
@@ -174,7 +181,7 @@ describe("or combinator", () => {
 
   it("can match no method", () => {
     assert.equal(
-      lib.parseRequest(post.or(get).or(stat).or(any), {
+      lib.handle(post.or(get).or(stat).or(any), {
         url: "https://web3.storage/car/bafy_hash",
       }),
       `fallback {"path":"/car/bafy_hash"}`
@@ -183,7 +190,7 @@ describe("or combinator", () => {
 
   it("can match any method", () => {
     assert.equal(
-      lib.parseRequest(post.or(get).or(stat).or(any), {
+      lib.handle(post.or(get).or(stat).or(any), {
         method: "HEAD",
         url: "https://web3.storage/car/bafy_hash",
       }),
@@ -193,7 +200,7 @@ describe("or combinator", () => {
 
   it("can match any pathname", () => {
     assert.equal(
-      lib.parseRequest(post.or(get).or(stat).or(any), {
+      lib.handle(post.or(get).or(stat).or(any), {
         url: "https://web3.storage/boom/bot/cook",
       }),
       `fallback {"path":"/boom/bot/cook"}`
@@ -212,8 +219,8 @@ describe("non separator based matches", () => {
     )
     const calc = plus.or(minus)
 
-    assert.equal(lib.parsePath(calc, { pathname: "/calc/3+2/" }), 5)
-    assert.equal(lib.parsePath(calc, { pathname: "/calc/7-4/" }), 3)
+    assert.equal(lib.handle(calc, { url: "http://math.io/calc/3+2/" }), 5)
+    assert.equal(lib.handle(calc, { url: "http://math.io/calc/7-4/" }), 3)
   })
 
   it("throws if no delimiters are preset", () => {
@@ -241,8 +248,8 @@ describe("non separator based matches", () => {
       }
     )
 
-    assert.equal(lib.parsePath(r, { pathname: "/calc/3+2/" }), 5)
-    assert.equal(lib.parsePath(r, { pathname: "/calc/7-4/" }), 3)
-    assert.equal(lib.parsePath(r, { pathname: "/calc/3*5/" }), 15)
+    assert.equal(lib.handle(r, { url: "http://math.io/calc/3+2" }), 5)
+    assert.equal(lib.handle(r, { url: "http://math.io/calc/7-4" }), 3)
+    assert.equal(lib.handle(r, { url: "http://math.io/calc/3*5" }), 15)
   })
 })

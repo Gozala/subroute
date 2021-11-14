@@ -1,11 +1,11 @@
 import { describe, it, assert } from "./test.js"
-import * as lib from "../src/route.js"
+import * as lib from "../src/lib.js"
 
 const { route } = lib
 describe("template API", () => {
   it("parse single param", () => {
     const r = route`/car/${{ cid: lib.text }}`
-    assert.equal(typeof r, "object")
+    assert.equal(typeof r, "function")
     assert.equal(typeof r.parse, "function")
     assert.equal(typeof r.format, "function")
 

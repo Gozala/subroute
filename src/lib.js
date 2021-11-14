@@ -24,22 +24,27 @@ export const method =
    * @template {API.Segment[]} Segments
    * @param {readonly string[]} strings
    * @param  {Segments} matches
+   * @returns {API.RouteBinder<API.Build<Segments>>}
    */
-  (strings, ...matches) =>
-  /**
-   * @template T
-   * @param {(params: API.Build<Segments, {}>) => T} handler
-   * @returns {API.RouteHandler<T>}
-   */
+  (strings, ...matches) => {
+    const route = Route.compile({ strings, matches, method })
+    /**
+     * @template T
+     * @param {(input:API.Build<Segments>) => T} handler
+     */
+    const bind = handler => new RouteHandler(handler, route)
 
-  handler =>
-    new RouteHandler(handler, Route.compile({ strings, matches, method }))
+    return Object.assign(bind, {
+      parse: route.parse.bind(route),
+      format: route.format.bind(route),
+    })
+  }
 
 export const route = method()
 
 /**
  * @template T, U
- * @implements {API.RouteHandler<U>}
+ * @implements {API.RouteHandler<T, U>}
  */
 class RouteHandler {
   /**
@@ -64,9 +69,17 @@ class RouteHandler {
   }
 
   /**
+   *
+   * @param {API.FormatInput<T>} input
+   */
+  format(input) {
+    return this.route.format(input)
+  }
+
+  /**
    * @template E
-   * @param {API.RouteHandler<E>} other
-   * @returns {API.RouteHandler<U|E>}
+   * @param {API.Parser<E>} other
+   * @returns {API.Router<U|E>}
    */
   or(other) {
     return or(this, other)
@@ -75,20 +88,20 @@ class RouteHandler {
 
 /**
  * @template L, R
- * @param {API.RouteHandler<L>} left
- * @param {API.RouteHandler<R>} right
- * @returns {API.RouteHandler<L|R>}
+ * @param {API.Parser<L>} left
+ * @param {API.Parser<R>} right
+ * @returns {API.Router<L|R>}
  */
 export const or = (left, right) => new Or(left, right)
 
 /**
  * @template L, R
- * @implements {API.RouteHandler<L|R>}
+ * @implements {API.Router<L|R>}
  */
 class Or {
   /**
-   * @param {API.RouteHandler<L>} left
-   * @param {API.RouteHandler<R>} right
+   * @param {API.Parser<L>} left
+   * @param {API.Parser<R>} right
    */
 
   constructor(left, right) {
@@ -104,11 +117,11 @@ class Or {
   }
   /**
    * @template T
-   * @param {API.RouteHandler<T>} other
-   * @returns {API.RouteHandler<L|R|T>}
+   * @param {API.Parser<T>} other
+   * @returns {API.Router<L|R|T>}
    */
   or(other) {
-    /** @type {API.RouteHandler<L|R>} */
+    /** @type {API.Parser<L|R>} */
     const self = this
     return or(self, other)
   }

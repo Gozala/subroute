@@ -138,22 +138,6 @@ export const compile = ({ method, strings, matches }) => {
 }
 
 /**
- * @template {string} Verb
- * @param {Verb} [method]
- */
-export const method =
-  method =>
-  /**
-   * @template {Route.Segment[]} Segments
-   * @param {readonly string[]} strings
-   * @param  {Segments} matches
-   */
-  (strings, ...matches) =>
-    compile({ strings, matches, method })
-
-export const route = method()
-
-/**
  * @template T
  * @param {Route.Match<T>} match
  * @param {string} section
@@ -733,13 +717,3 @@ class Numeric {
     return ok({ ...state, pathname: `${state.pathname}${value}` })
   }
 }
-
-export const CONNECT = method("CONNECT")
-export const DELETE = method("DELETE")
-export const GET = method("GET")
-export const HEAD = method("HEAD")
-export const OPTIONS = method("OPTIONS")
-export const POST = method("POST")
-export const PUT = method("PUT")
-export const PATCH = method("PATCH")
-export const TRACE = method("TRACE ")

@@ -23,6 +23,20 @@ describe("template API", () => {
     )
   })
 
+  it("format single param", () => {
+    const r = route`/car/${{ cid: lib.text }}`(data => data.cid)
+    // @ts-expect-error - Property 'cid' is missing
+    assert.equal(lib.format(r, {}).pathname, "/car/undefined")
+
+    // @ts-expect-error - Type 'number' is not assignable to type 'string'.
+    assert.equal(lib.format(r, { cid: 1 }).pathname, "/car/1")
+
+    assert.equal(
+      lib.format(r, { cid: "bafy...hash" }).pathname,
+      "/car/bafy...hash"
+    )
+  })
+
   it("allows substitutions", () => {
     const method = "status"
     const r = route`/${method}/${{ cid: lib.text }}`(data => [data.cid])
@@ -187,7 +201,7 @@ describe("or combinator", () => {
   })
 })
 
-describe.only("non separator based matches", () => {
+describe("non separator based matches", () => {
   it("can use arbitrary delimiters", () => {
     const plus = lib.route`/calc/${{ x: lib.int }}+${{ y: lib.int }}/`(
       ({ x, y }) => x + y

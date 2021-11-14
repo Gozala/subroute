@@ -20,6 +20,8 @@ export interface Route<T, X = Problem, Y = Problem, C = never>
 export interface Parser<T, X = Problem, C = never>
   extends Parse.Parser<never, Problem, T> {}
 
+export interface Formatter<T, X = Problem, C = never>
+  extends Format.Formatter<C, X, T> {}
 export type Match<T> = Route<T> | Capture<T>
 
 export interface Capture<T> {
@@ -28,8 +30,18 @@ export interface Capture<T> {
   end(): Route<T>
 }
 
-export interface RouteHandler<T> extends Parser<T> {
-  or<U>(other: RouteHandler<U>): RouteHandler<T | U>
+export interface RouteBinder<T, X = Problem, Y = Problem, C = never>
+  extends Route<T, X, Y, C> {
+  <U>(handler: (params: T) => U): RouteHandler<T, U>
+}
+
+export interface RouteHandler<T, U> extends Parser<U>, Formatter<T> {
+  route: Route<T>
+  or<E>(other: Parser<E>): Router<U | E>
+}
+
+export interface Router<T> extends Parser<T> {
+  or<U>(other: Parser<U>): Router<T | U>
 }
 
 export type Problem =

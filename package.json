@@ -9,10 +9,11 @@
   ],
   "type": "module",
   "module": "./src/lib.js",
-  "types": "./src/lib.d.ts",
+  "types": "./dist/src/lib.d.ts",
   "exports": {
     ".": {
-      "import": "./src/lib.js"
+      "import": "./src/lib.js",
+      "types": "./dist/src/lib.d.ts"
     }
   },
   "scripts": {
@@ -21,7 +22,8 @@
     "test:types:ts": "npm test --prefix test/ts-use",
     "test:types:es": "npm test --prefix test/es-use",
     "test:types": "npm run test:types:ts && npm run test:types:es",
-    "test": "npm run test:es && npm run test:web"
+    "test": "npm run test:es && npm run test:web",
+    "prepack": "tsc --build"
   },
   "license": "MIT",
   "author": "Irakli Gozalishvili <dev@gozala.io>",

@@ -16,6 +16,10 @@
       "types": "./dist/src/lib.d.ts"
     }
   },
+  "files": [
+    "src",
+    "dist"
+  ],
   "scripts": {
     "test:web": "playwright-test test/*.spec.js",
     "test:es": "mocha test/*.spec.js",

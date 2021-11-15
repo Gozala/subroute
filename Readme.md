@@ -62,13 +62,16 @@ Even if we manage to keep parameter nameing in sync across the code base and exc
 import { GET, int, format } from "subroute"
 import express from "express"
 
-const index = GET`/`(
-  () =>
-    `<a href='${format(calc.route, { a: 313, b: 3 })}'>Calculate 313 + 3</a>`
+const example = { a: 313, b: 3 }
+
+const index = GET`/`(() =>
+  `<a href='${format(calc.route, example)}'>
+    Calculate ${example.a} + ${example.b}
+  </a>`)
 )
 
-const calc = GET`/calculator/${{ a: int }}/+/${{ b: int }}`(
-  ({ a, b }) => `${a + b}`
+const calc = GET`/calculator/${{ a: int }}/+/${{ b: int }}`(({ a, b }) =>
+  `${a + b}`
 )
 
 const router = index.or(caluclator)

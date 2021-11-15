@@ -1,5 +1,12 @@
 # Changelog
 
+### [1.0.1](https://www.github.com/Gozala/subroute/compare/v1.0.0...v1.0.1) (2021-11-15)
+
+
+### Bug Fixes
+
+* include typedefs ([b6e13ec](https://www.github.com/Gozala/subroute/commit/b6e13ecae3f1abd7dc84b049e477e73a394f4972))
+
 ## 1.0.0 (2021-11-14)
 
 
